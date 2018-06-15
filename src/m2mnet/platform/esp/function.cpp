@@ -31,7 +31,7 @@ extern "C" void  factory_reset(void);
 extern "C" bool wp2p_autoConfig(void);
 extern "C" void wp2p_smartconnect(void);
 extern "C" int io_write(u8 pin,u8 val);
-
+extern "C" int serial_write(u16 slen, u8 *p_data);
 // function
 
 void hardware_init(void){
@@ -155,7 +155,6 @@ void wp2p_smartconnect(void) {
 /********************* cmd support *******************************/
 int io_mode_int(u8 pin,u8 mode){
 	//printf(">>>>>>>>>>>>>> pin setting pin  = %d,mode = %d \n",pin,mode);
-
 	pinMode(pin,mode);
 	return 0;
 }
@@ -167,4 +166,6 @@ int io_write(u8 pin,u8 val){
     digitalWrite(LED_WIFI_CONN_PIN,val);
 	return 0;
 }
-
+int serial_write(u16 slen, u8 *p_data){
+    return Serial.write(p_data, (size_t)slen);
+}

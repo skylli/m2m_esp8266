@@ -9,7 +9,7 @@
 #include "m2mnet/config/config.h"
 #include "m2mnet/include/app_implement.h"
 #include "m2mnet/include/util.h"
-
+#include "m2mnet/three_party/hadc_protocol/hadc.h"
 #include "app_m2m_handle.h"
 #include "user_interface.h"
 
@@ -21,10 +21,11 @@
 #define TST_DEV_SERVER_HOST  ("192.168.0.222")
 #define TST_DEV_SERVER_PORT (9527)
 
+/**estern api***********/
+extern int cmd_handle(u8 cmd, u16 slen, u8 *p_data);
 
 /*************************************************************/
 extern char *getlocal_ip(void);
-
 
 static M2M_id_T device_id;
 static M2M_T m2m;
@@ -90,6 +91,18 @@ void dev_callback(int code,M2M_packet_T **pp_ack_data,M2M_packet_T *p_recv_data,
                 *pp_ack_data = p_ack;
             }
             break;
+        case M2M_REQUEST_DATA:
+               if( p_recv_data && p_recv_data->len > 0 && p_recv_data->p_data){
+                    u8 *p_data=NULL, cmd =0;
+                    int slen = hadc_package_decode( &p_data, &cmd, p_recv_data->len, p_recv_data->p_data);
+                    if( slen){
+                        cmd_handle(cmd, slen,p_data);
+                    }
+                    if(p_arg ) {
+                           *((int*) p_arg) = *((int*) p_arg) - 1;
+                       }
+                }
+               break;
         default:
             if( p_recv_data && p_recv_data->len > 0 && p_recv_data->p_data){
                 M2M_packet_T *p_ack = (M2M_packet_T*)mmalloc(sizeof(M2M_packet_T));

@@ -32,11 +32,12 @@ extern "C"{
 #endif
 
 void hardware_init(void);
-void  factory_reset(void);
+void factory_reset(void);
 bool wp2p_autoConfig(void);
 void wp2p_smartconnect(void);
 int io_write(u8 pin,u8 val);
 void local_ip_save(void);
+int serial_write(u16 slen, u8 *p_data);
 
 
 #ifdef __cplusplus

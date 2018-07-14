@@ -52,8 +52,8 @@ int mmemset(u8 *dst,u8 c,size_t n){
     int i;
     for(i=0;i<n;i++){
         dst[i] = c;
-
     }
+    return 0;
 }
 void mfree(void *ptr){
     if( !ptr)

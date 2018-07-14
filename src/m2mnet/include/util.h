@@ -33,7 +33,15 @@
 // 两个值的相对差
 #define DIFF_(a,b)                  (( a>b )?( a-b ):( b-a ))
 
-#define A_BIGER(a,b,large)            ((a>b) ? (1):( (DIFF_(a,b) > large)?1:0 ))
+// todo 大端不一样
+#define M_BITSET(v,n)	( v | (0x01<<(n-1)) )
+#define M_BITUNSET(v,n)	( v & (~(0x01<<(n-1)) ))
+#define M_BITGET(v,n)	( ( v>>(n-1) ) & 0x01 )
+
+#define M_MIN(a,b)		((a>b)?b:a)
+#define M_MAX(a,b)		( (a>b)?a:b)
+
+#define A_BIGER(a,b,large)            ((a>b) ? (TRUE):( (DIFF_(a,b) > large)?TRUE:FALSE ))
 #define A_BIGER_U32(a,b)    A_BIGER(a,b,0x7fffffff)
 #define A_BIGER_U16(a,b)    A_BIGER(a,b,0x7fff)
 #define A_BIGER_U8(a,b)    A_BIGER(a,b,0x7f)
@@ -55,7 +63,13 @@
 #define CHAR_2_INT(n,c)  n = (CHAR_BELONG(c,'0','9')?(c-'0'):( CHAR_BELONG(c, 'a', 'b')?(c-'a'+10):( CHAR_BELONG(c,'A','F')?(c-'A' + 10):n) ) )
 #define STR_2_INT_ARRAY(d,s,len) do{ int i=0; \
                                  for(i=0;i<len;i++){ CHAR_2_INT(d[i],s[i]);} }while(0)
-                                    
+#define malloc_cpy(d,dlen,s,slen,ret)	do{ if(d && s && slen > 0){\
+											d = mmalloc(slen);\
+											_RETURN_EQUAL_0(d, ret);\
+											mcpy(d,s,slen);\
+											dlen = slen;\
+											}}while(0)
+								 
 #ifdef __cplusplus
                                  extern "C"{
 #endif

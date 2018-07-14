@@ -14,18 +14,18 @@
 #include "m2m_protocol.h"
 
 /*** define *************************/
-#define _PDU_PKT_CREAT(p_pdu,cmd,code,msgid,ctoken,pdu_size,ret) do{         \
+#define _PDU_PKT_CREAT(p_pdu,cmd,code,msgid,token,pdu_size,ret) do{         \
             p_pdu = coap_pdu_init( cmd,code,msgid,pdu_size);                 \
             _RETURN_EQUAL_0(p_pdu, M2M_ERR_NULL);                       \
-            ret = coap_add_token(p_pdu,sizeof(u32),(const u8*)&ctoken);             \
+            ret = coap_add_token(p_pdu,sizeof(u32),(const u8*)&token);             \
             _RETURN_EQUAL_FREE(ret, 0, p_pdu, M2M_ERR_PROTO_PKT_BUILD); \
         }while(0)
 
 #define _PDU_ACK_CREAT( p_pdu,p_ack,pdu_size,ret) \
-            _PDU_PKT_CREAT(p_pdu,COAP_MESSAGE_ACK,(u8)p_ack->code,p_ack->msgid, p_ack->ctoken,pdu_size,ret)
+            _PDU_PKT_CREAT(p_pdu,COAP_MESSAGE_ACK,(u8)p_ack->code,p_ack->msgid, p_ack->token,pdu_size,ret)
 
 #define _PDU_GET_RQ_CREAT(p_pdu,p_args,ret,pdu_size) \
-            _PDU_PKT_CREAT(p_pdu,COAP_MESSAGE_CON,COAP_REQUEST_GET,p_args->messageid, p_args->ctoken,pdu_size,ret)
+            _PDU_PKT_CREAT(p_pdu,COAP_MESSAGE_CON,COAP_REQUEST_GET,p_args->messageid, p_args->token,pdu_size,ret)
 
 #define _PROTO_COAP_SIZE(oplen,pylen)    ( 4 + 4+ oplen + 4 + pylen)
 #define _PROTO_ROUTER_HDR_LEN           ( sizeof(Router_hdr_T) ) 
@@ -50,6 +50,7 @@
                                                     p_router->version = PROTO_VERSION_HDR;      \
                                                     p_router->hops = M2M_MAX_HOPS;              \
                                                     p_router->stoken = p_args->stoken;          \
+                                                    p_router->ctoken = p_args->ctoken;          \
                                                     p_router->msgid = p_args->messageid;        \
                                                 }while(0)
                                                 
@@ -58,6 +59,7 @@
                                                        p_router->version = PROTO_VERSION_HDR;                       \
                                                        p_router->hops = M2M_MAX_HOPS;               \
                                                        p_router->stoken = p_ack->stoken;            \
+													   p_router->ctoken = p_ack->ctoken;			 \
                                                        p_router->msgid = p_ack->msgid;              \
                                                     }while(0)
 #define  COAP_CODE_GET(code)   ((code >> 5) * 100 + (code & 0x1F))
@@ -71,19 +73,31 @@ typedef enum{
     COAP_OPT_TKT_ACK    = 0X04,
     COAP_OPT_PING_RQ    = 0X05,
     COAP_OPT_PING_ACK   = 0X06,
-    COAP_OPT_KEYSET_RQ  = 0X07,
-    COAP_OPT_KEYSET_ACK = 0X08,
+    COAP_OPT_SESSION_KEYSET_RQ  = 0X07,
+    COAP_OPT_SESSION_KEYSET_ACK = 0X08,
     COAP_OPT_ERROR_ACK = 0X09,
     COAP_OPT_ONLINKCHECK_RQ  = 0X0A,
     COAP_OPT_ONLINKCHECK_ACK = 0X0B,
-    COAP_OPT_BROADCAST_RQ  = 0X0C,
-    COAP_OPT_BROADCAST_ACK = 0X0D,
+	COAP_OPT_NET_KETSET_RQ  = 0X0C,
+    COAP_OPT_NET_KETSET_ACK = 0X0D,
     
+    COAP_OPT_OBSERVER_RQ  = 0X0E,
+    COAP_OPT_OBSERVER_ACK = 0X0F,
+    
+    COAP_OPT_BROADCAST_RQ  = 0X10,
+    COAP_OPT_BROADCAST_ACK = 0X11,
     COAP_OPT_MAX
 
 }COAP_OPTION_TYPE;
 
 static M2M_Return_T _proto_m2m_opt_get(coap_pdu_t *p_pdu,u8 *opt_type,u8 **p_opt,u8 *opt_len);
+static int _proto_m2m_ack_send( 
+    M2M_proto_ack_T *p_ack,
+    u8 opt_type, 
+    u16 opt_len, 
+    const u8 *p_opt_data,
+    u16 payload_len,
+    const u8 *p_payload );
 
 int _proto_m2m_enc(u8 *p_dst, u8 *p_src, int src_len,Net_enc_T *p_enc){
 
@@ -100,7 +114,9 @@ int _proto_m2m_enc(u8 *p_dst, u8 *p_src, int src_len,Net_enc_T *p_enc){
 
         case M2M_ENC_TYPE_AES128:
             
-            ret = data_enc( p_src,p_dst,src_len,p_enc->keylen,p_enc->p_enckey);
+            ret = data_enc( (const char*)p_src, (char*)p_dst,src_len,p_enc->keylen,p_enc->p_enckey);
+            break;
+        default:
             break;
     }
     //m2m_bytes_dump("after encode data :", p_dst, ret);
@@ -112,10 +128,10 @@ int _proto_m2m_enc(u8 *p_dst, u8 *p_src, int src_len,Net_enc_T *p_enc){
 ***
 ***/
 int _proto_m2m_creat(M2M_Proto_Cmd_Arg_T *p_args,int flags){
-    
+    return 0;
 }
 int _proto_m2m_destory(M2M_Proto_Cmd_Arg_T *p_args,int flags){
-    
+    return 0;
 }
 /*********************************
 ** 1. 进行 coap 封包, coap header + option + payload.
@@ -239,31 +255,77 @@ static int _proto_m2m_request_send(
 /*
 * 刷新 会话 ctoken.同时清零 message id
 */
-int _proto_m2m_token_rq(M2M_Proto_Cmd_Arg_T *p_args,int flags){
+int token_rq(M2M_Proto_Cmd_Arg_T *p_args,int flags){
 
     return _proto_m2m_request_send(p_args, COAP_OPT_TKT_RQ, 0, NULL,0, NULL);
 }
+static int token_ack(M2M_proto_ack_T *p_ack,int flags){
 
-int _proto_m2m_keyset_rq(M2M_Proto_Cmd_Arg_T *p_args,int flags){
+    return _proto_m2m_ack_send(p_ack,COAP_OPT_TKT_ACK,p_ack->payload.len,p_ack->payload.p_data,0,NULL);
+}
+
+int session_keyset_rq(M2M_Proto_Cmd_Arg_T *p_args,int flags){
 
     if( p_args->p_payload == 0 || p_args->payloadlen <= 0)
         return M2M_ERR_PROTO_PKT_BUILD;
 
-    return _proto_m2m_request_send(p_args, COAP_OPT_KEYSET_RQ, p_args->payloadlen, p_args->p_payload,0, NULL);
+    return _proto_m2m_request_send(p_args, COAP_OPT_SESSION_KEYSET_RQ, p_args->payloadlen, p_args->p_payload,0, NULL);
 }
+static int session_keyset_ack(M2M_proto_ack_T *p_ack,int flags){
+
+    return _proto_m2m_ack_send(p_ack,COAP_OPT_SESSION_KEYSET_ACK,p_ack->payload.len,p_ack->payload.p_data,0,NULL);
+}
+
 /*
 * 刷新 会话 ctoken.同时清零 message id
 */
-int _proto_m2m_data_rq(M2M_Proto_Cmd_Arg_T *p_args,int flags){
+int data_rq(M2M_Proto_Cmd_Arg_T *p_args,int flags){
 
     return _proto_m2m_request_send(p_args, COAP_OPT_DATA_RQ,0, NULL,p_args->payloadlen, p_args->p_payload);
 }
+static int data_ack(M2M_proto_ack_T *p_ack,int flags){
+    //u8 opt = 0;
+    return _proto_m2m_ack_send(p_ack,COAP_OPT_DATA_ACK,0,NULL,p_ack->payload.len,p_ack->payload.p_data);
+}
+
+/*
+** observer 
+**/
+int observer_rq(M2M_Proto_Cmd_Arg_T *p_args,int flags){
+
+	M2M_observer_T *p_obs = (M2M_observer_T*)p_args->p_extra;
+	u8 ack_index[3];
+	
+	_RETURN_EQUAL_0(p_obs, M2M_ERR_INVALID);
+
+	ack_index[0] = p_obs->ack_type;
+	mcpy( (u8*)&ack_index[1], (u8*)&p_obs->index, 2);
+	
+	
+	return _proto_m2m_request_send(p_args, COAP_OPT_OBSERVER_RQ, 3, ack_index, p_args->payloadlen, p_args->p_payload);
+}
+static int observer_ack(M2M_proto_ack_T *p_ack,int flags){
+
+	M2M_observer_T *p_obs = (M2M_observer_T*)p_ack->p_extra;
+	u8 ack_index[3];
+
+	_RETURN_EQUAL_0(p_obs, M2M_ERR_INVALID);
+	ack_index[0] = p_obs->ack_type;
+	mcpy(&ack_index[1], (u8*)&p_obs->index, 2);
+
+    return _proto_m2m_ack_send(p_ack,COAP_OPT_OBSERVER_ACK, 3, ack_index,p_ack->payload.len,p_ack->payload.p_data);
+}
+
 /**
 ** ping 包
 **/
-static int _proto_m2m_ping_rq(M2M_Proto_Cmd_Arg_T *p_args,int flags){
+static int ping_rq(M2M_Proto_Cmd_Arg_T *p_args,int flags){
 
     return _proto_m2m_request_send(p_args, COAP_OPT_PING_RQ, p_args->payloadlen, p_args->p_payload,0, NULL);
+}
+static int ping_ack(M2M_proto_ack_T *p_ack,int flags){
+
+    return _proto_m2m_ack_send(p_ack,COAP_OPT_PING_ACK,p_ack->payload.len,p_ack->payload.p_data,0,NULL);
 }
 
 /**
@@ -323,23 +385,11 @@ static int coap_pkt_enc( Router_hdr_T **pp_r,
   _COAP_SECRET_BUILD(p_r,p_ack->p_enc, payload_dec_len, p_pdu->hdr, p_pdu->length);
 }
 #endif
-static int _proto_m2m_token_ack(M2M_proto_ack_T *p_ack,int flags){
 
-    return _proto_m2m_ack_send(p_ack,COAP_OPT_TKT_ACK,p_ack->payload.len,p_ack->payload.p_data,0,NULL);
-}
-static int _proto_m2m_setkey_ack(M2M_proto_ack_T *p_ack,int flags){
 
-    return _proto_m2m_ack_send(p_ack,COAP_OPT_KEYSET_ACK,p_ack->payload.len,p_ack->payload.p_data,0,NULL);
-}
-static int _proto_m2m_ping_ack(M2M_proto_ack_T *p_ack,int flags){
 
-    return _proto_m2m_ack_send(p_ack,COAP_OPT_PING_ACK,p_ack->payload.len,p_ack->payload.p_data,0,NULL);
-}
-static int _proto_m2m_data_ack(M2M_proto_ack_T *p_ack,int flags){
-    //u8 opt = 0;
-    return _proto_m2m_ack_send(p_ack,COAP_OPT_DATA_ACK,0,NULL,p_ack->payload.len,p_ack->payload.p_data);
-}
-static int _proto_m2m_pkt_err_ack(M2M_proto_ack_T *p_ack,int flags){
+
+static int error_ack(M2M_proto_ack_T *p_ack,int flags){
     return _proto_m2m_ack_send(p_ack,COAP_OPT_ERROR_ACK,0,NULL,p_ack->payload.len,p_ack->payload.p_data);
 }
 static int _recv_packet_illegal(Router_hdr_T *p_r){
@@ -354,7 +404,7 @@ static int _recv_packet_illegal(Router_hdr_T *p_r){
 /**********  接收处理 ************************************************************************/
 // socket 接收 目前只支持阻塞接收
 // 解码 路由层
-static int _proto_m2m_recvpkt(M2M_proto_recv_rawpkt_T *p_rawpkt,int flags){
+static int pkt_receive(M2M_proto_recv_rawpkt_T *p_rawpkt,int flags){
 
     int ret = 0;
     int tmp = _PROTO_LEN(0,0);
@@ -375,7 +425,8 @@ static int _proto_m2m_recvpkt(M2M_proto_recv_rawpkt_T *p_rawpkt,int flags){
     p_rawpkt->enc_type = p_r->secret_type;
     p_rawpkt->msgid = p_r->msgid;
     p_rawpkt->stoken = p_r->stoken;
-    if( p_r->stoken == 0 && p_rawpkt->enc_type != M2M_ENC_TYPE_BROADCAST )
+	p_rawpkt->ctoken = p_r->ctoken;
+    if( p_r->stoken == 0 && p_rawpkt->ctoken == 0 && p_rawpkt->enc_type != M2M_ENC_TYPE_BROADCAST )
         m2m_debug_level( M2M_LOG_WARN,"NO token !!");
     //m2m_bytes_dump("encoder pdu :", p_r->p_payload,p_r->payloadlen);
 
@@ -400,83 +451,122 @@ static M2M_Return_T _proto_m2m_cmd_parse(coap_pdu_t *p_pdu_recv,M2M_proto_dec_re
     u8 opt_type,opt_len,opt_get = 0,payload_get = 0;
     size_t payload_len = 0;
     u8 *p_opt, *p_payload = NULL;
+	u8 extra[3];
     _proto_m2m_opt_get(p_pdu_recv,&opt_type,&p_opt,&opt_len);
     switch( opt_type ){
-            case COAP_OPT_DATA_RQ:
+		
+		case COAP_OPT_DATA_RQ:
+		    m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = data request");
+		    p_dec->cmd = M2M_PROTO_CMD_DATA_RQ;
+		    payload_get = 1;
+		    break;
+			
+		case COAP_OPT_DATA_ACK:
+		    m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = data ack");
+		    p_dec->cmd = M2M_PROTO_CMD_DATA_ACK;
+		    payload_get = 1;
+		     break;
+		case COAP_OPT_TKT_RQ:
 
-                m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = data request");
-                p_dec->cmd = M2M_PROTO_CMD_DATA_RQ;
-                payload_get = 1;
-                break;
-            case COAP_OPT_DATA_ACK:
-                
-                m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = data ack");
-                p_dec->cmd = M2M_PROTO_CMD_DATA_ACK;
-                payload_get = 1;
-                 break;
-            case COAP_OPT_TKT_RQ:
-            
-                m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = toke request");
-                p_dec->cmd = M2M_PROTO_CMD_TOKEN_RQ;
-                break;
-            case COAP_OPT_TKT_ACK:
+		    m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = toke request");
+		    p_dec->cmd = M2M_PROTO_CMD_TOKEN_RQ;
+		    break;
+		case COAP_OPT_TKT_ACK:
+		    m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = token request");
+		    p_dec->cmd = M2M_PROTO_CMD_TOKEN_ACK;
+		    opt_get = 1;
+		    // get ctoken to payload.
+		    break; 
+		case COAP_OPT_SESSION_KEYSET_RQ:
+		    m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = session setkey request");
+		    p_dec->cmd = M2M_PROTO_CMD_SESSION_SETKEY_SET_RQ;
+		    opt_get = 1;
+		    break;
+		case COAP_OPT_SESSION_KEYSET_ACK:
 
-            
-                m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = token request");
-                p_dec->cmd = M2M_PROTO_CMD_TOKEN_ACK;
-                opt_get = 1;
-                // get ctoken to payload.
-                break; 
-            case COAP_OPT_KEYSET_RQ:
+		    m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = session setkey ack");
+		    p_dec->cmd = M2M_PROTO_CMD_SESSION_SETKEY_SET_ACK;
+		    break;
+		case COAP_OPT_PING_RQ:
 
-            
-            
-                m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = setkey request");
-                p_dec->cmd = M2M_PROTO_CMD_SETKEY_RQ;
-                opt_get = 1;
-                break;
-            case COAP_OPT_KEYSET_ACK:
-            
-                m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = setkey ack");
-                p_dec->cmd = M2M_PROTO_CMD_SETKEY_ACK;
-                break;
-            case COAP_OPT_PING_RQ:
-            
-                m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = ping request");
-                p_dec->cmd = M2M_PROTO_CMD_PING_RQ;
-                break;
-            case COAP_OPT_PING_ACK:
-                
-                m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = ping ack");
-                p_dec->cmd = M2M_PROTO_CMD_PING_ACK;
-                break;
-            case COAP_OPT_ERROR_ACK:
-                m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = error ack");
-                p_dec->cmd = M2M_PROTO_CMD_ERR_PKT_ACK;
-                break;
-           case COAP_OPT_ONLINKCHECK_RQ:
-                opt_get = 1;
-                m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = Online check request");
-                p_dec->cmd = M2M_PROTO_CMD_ONLINK_CHECK_RQ;
-                break;
-           case COAP_OPT_ONLINKCHECK_ACK:
-                opt_get = 1;
-                m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = Online check ack");
-                p_dec->cmd = M2M_PROTO_CMD_ONLINK_CHECK_ACK;
-                break;
+		    m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = ping request");
+		    p_dec->cmd = M2M_PROTO_CMD_PING_RQ;
+		    break;
+		case COAP_OPT_PING_ACK:
+		    
+		    m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = ping ack");
+		    p_dec->cmd = M2M_PROTO_CMD_PING_ACK;
+		    break;
+		case COAP_OPT_ERROR_ACK:
+		    m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = error ack");
+		    p_dec->cmd = M2M_PROTO_CMD_ERR_PKT_ACK;
+		    break;
+		case COAP_OPT_ONLINKCHECK_RQ:
+		    opt_get = 1;
+		    m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = Online check request");
+		    p_dec->cmd = M2M_PROTO_CMD_ONLINK_CHECK_RQ;
+		    break;
+		case COAP_OPT_ONLINKCHECK_ACK:
+		    opt_get = 1;
+		    m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = Online check ack");
+		    p_dec->cmd = M2M_PROTO_CMD_ONLINK_CHECK_ACK;
+		    break;
+			
+		case COAP_OPT_NET_KETSET_RQ:
+		    m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = net secretkey set request");
+		    p_dec->cmd = M2M_PROTO_CMD_NET_SETKEY_RQ;
+		    opt_get = 1;
+		    // get ctoken to payload.
+		    break; 
+		case COAP_OPT_NET_KETSET_ACK:
+		    m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = net secretkey set request");
+		    p_dec->cmd = M2M_PROTO_CMD_NET_SETKEY_ACK;
+		    opt_get = 1;
+		    break;
 
 #ifdef CONF_BROADCAST_ENABLE                
-           case COAP_OPT_BROADCAST_RQ:
-                opt_get = 1;
-                m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = Broadcast request");
-                p_dec->cmd = M2M_PROTO_CMD_BROADCAST_RQ;
-                break;
-           case COAP_OPT_BROADCAST_ACK:
-                opt_get = 1;
-                m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = broadcast request ack");
-                p_dec->cmd = M2M_PROTO_CMD_BROADCAST_ACK;
-                break;
+		case COAP_OPT_BROADCAST_RQ:
+		    opt_get = 1;
+		    m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = Broadcast request");
+		    p_dec->cmd = M2M_PROTO_CMD_BROADCAST_RQ;
+		    break;
+		case COAP_OPT_BROADCAST_ACK:
+		    opt_get = 1;
+		    m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = broadcast request ack");
+		    p_dec->cmd = M2M_PROTO_CMD_BROADCAST_ACK;
+		    break;
 #endif //CONF_BROADCAST_ENABLE
+
+		case COAP_OPT_OBSERVER_RQ:
+		  m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = observer request");
+		  p_dec->cmd = M2M_PROTO_CMD_SESSION_OBSERVER_RQ;
+		  payload_get = 1;
+		  if( opt_len ==  3 && p_opt ){
+			  M2M_observer_T *p_obs = (M2M_observer_T*)mmalloc(sizeof(M2M_observer_T));
+			  _RETURN_EQUAL_0(p_obs, M2M_ERR_NULL);
+		  	  mcpy(extra, p_opt, 3);
+			  p_obs->ack_type = extra[0];
+			  mcpy((u8*)&p_obs->index,  &extra[1], 2);
+			  p_dec->p_extra = p_obs;
+
+		  }
+		  break;
+		  
+		case COAP_OPT_OBSERVER_ACK:
+		  m2m_debug_level(M2M_LOG_DEBUG, "receive cmd = observer ack");
+		  p_dec->cmd = M2M_PROTO_CMD_SESSION_OBSERVER_ACK;
+		  payload_get = 1;
+		  if( opt_len == 3 && p_opt ){
+			  M2M_observer_T *p_obs = (M2M_observer_T*)mmalloc(sizeof(M2M_observer_T));
+			  _RETURN_EQUAL_0(p_obs, M2M_ERR_NULL);
+			  mcpy(extra, p_opt, 3);
+			  p_obs->ack_type = extra[0];
+			  mcpy((u8*)&p_obs->index,  (u8*)&extra[1], 2);
+			  p_dec->p_extra = p_obs;
+
+		  }
+		  break;
+
     }
     // get payload.
     if( payload_get == 1){
@@ -487,7 +577,7 @@ static M2M_Return_T _proto_m2m_cmd_parse(coap_pdu_t *p_pdu_recv,M2M_proto_dec_re
             mcpy( (u8*)p_dec->payload.p_data, (u8*)p_payload,payload_len);
             p_dec->payload.len = payload_len;
         }
-    }else if( opt_get == 1 ){
+    } else if( opt_get == 1 ){
         // get option data.
         if( opt_len > 0 && p_opt ){
               p_dec->payload.p_data = mmalloc(opt_len + 1);
@@ -502,7 +592,7 @@ static M2M_Return_T _proto_m2m_cmd_parse(coap_pdu_t *p_pdu_recv,M2M_proto_dec_re
 // 对接收包进行解码
 // 注意 该函数会 malloc p_dec->payload, 所以后面必须手动 free p_dec->payload.
 // 返回长度
-static int _proto_m2m_dec( M2M_dec_args_T *p_a,int flags){
+static int pkt_decode( M2M_dec_args_T *p_a,int flags){
     // crc 计算
     int ret_dec = 0,ret = 0;
     M2M_proto_dec_recv_pkt_T *p_dec = p_a->p_dec;
@@ -529,7 +619,7 @@ static int _proto_m2m_dec( M2M_dec_args_T *p_a,int flags){
         
         // 一致才解码
         m2m_debug_level(M2M_LOG_DEBUG,"receive encrypted package");
-        ret_dec = data_dec( p_r->p_payload,p_d, payload_enc_len, p_dec->p_enc->keylen,p_dec->p_enc->p_enckey);
+        ret_dec = data_dec( (const char*)p_r->p_payload,(char*)p_d, payload_enc_len, p_dec->p_enc->keylen,p_dec->p_enc->p_enckey);
         if( ret_dec <= 0 ){
             m2m_debug_level(M2M_LOG_WARN,"Package decode failure !!");
             MFREE(p_d);
@@ -551,7 +641,7 @@ static int _proto_m2m_dec( M2M_dec_args_T *p_a,int flags){
     if( p_pdu->hdr->token_length != sizeof(u32) ){
         return -1;
     }
-    mcpy( (u8*)&p_dec->ctoken,(u8*)p_pdu->hdr->token,p_pdu->hdr->token_length);
+    mcpy( (u8*)&p_dec->token,(u8*)p_pdu->hdr->token,p_pdu->hdr->token_length);
 
     // get  code.
     p_dec->code = p_pdu->hdr->code;// COAP_CODE_GET(p_pdu->hdr->code);
@@ -564,7 +654,7 @@ static int _proto_m2m_dec( M2M_dec_args_T *p_a,int flags){
     // destory the pdu. 
     coap_delete_pdu(p_pdu);
     
-    PKT_INFO_PRINT(M2M_LOG_DEBUG,p_dec->msgid,p_dec->cmd,p_dec->ctoken, p_rawpkt->stoken, p_rawpkt->remote,"receive package info:: ");
+    PKT_INFO_PRINT(M2M_LOG_DEBUG,p_dec->msgid,p_dec->cmd,p_rawpkt->ctoken, p_rawpkt->stoken, p_rawpkt->remote,"receive package info:: ");
     // return the length of decode data.
     return  M2M_ERR_NOERR;
 
@@ -608,6 +698,15 @@ static M2M_Return_T onlinkchek_ack(M2M_proto_ack_T *p_ack, int flags){
     return _proto_m2m_ack_send(p_ack, COAP_OPT_ONLINKCHECK_ACK, p_ack->payload.len,p_ack->payload.p_data,0, NULL);
 }
 
+int net_secretsky_set_rq(M2M_Proto_Cmd_Arg_T *p_args,int flags){
+
+    return _proto_m2m_request_send(p_args, COAP_OPT_NET_KETSET_RQ,p_args->payloadlen, p_args->p_payload,0, NULL);
+}
+
+static M2M_Return_T net_secretsky_set_ack(M2M_proto_ack_T *p_ack, int flags){
+    return _proto_m2m_ack_send(p_ack, COAP_OPT_NET_KETSET_ACK, p_ack->payload.len,p_ack->payload.p_data,0, NULL);
+}
+
 static M2M_Return_T relay_package(M2M_protocol_relay_T *p_args,int flags){
 
     if(!p_args || !p_args->p_payload)
@@ -625,33 +724,37 @@ m2m_func _m2m_protocol_funcTable[M2M_PROTO_CMD_MAX + 1] =
     //M2M_PROTO_IOC_CMD_SESSION_CREAT_ACK,
     NULL,
     //M2M_PROTO_IOC_CMD_TOKEN_RQ,
-    (m2m_func)_proto_m2m_token_rq,
+    (m2m_func)token_rq,
     //M2M_PROTO_IOC_CMD_TOKEN_ACK,
-    (m2m_func)_proto_m2m_token_ack,
-    //M2M_PROTO_IOC_CMD_SETKEY_RQ,
-    (m2m_func)_proto_m2m_keyset_rq, // 5
-    //M2M_PROTO_IOC_CMD_SETKEY_ACK,
-    (m2m_func)_proto_m2m_setkey_ack,
+    (m2m_func)token_ack,
+    //M2M_PROTO_IOC_CMD_SESSION_SETKEY_RQ,
+    (m2m_func)session_keyset_rq, // 5
+    //M2M_PROTO_IOC_CMD_SESSION_SETKEY_ACK,
+    (m2m_func)session_keyset_ack,
     //M2M_PROTO_IOC_CMD_PING_RQ,
-    (m2m_func)_proto_m2m_ping_rq,
+    (m2m_func)ping_rq,
     //M2M_PROTO_IOC_CMD_PING_ACK,
-    (m2m_func)_proto_m2m_ping_ack,
+    (m2m_func)ping_ack,
     //M2M_PROTO_IOC_CMD_DATA_RQ,
-    (m2m_func)_proto_m2m_data_rq,
+    (m2m_func)data_rq,
     //M2M_PROTO_IOC_CMD_DATA_ACK,
-    (m2m_func)_proto_m2m_data_ack,      // 10
+    (m2m_func)data_ack,      // 10
     //M2M_PROTO_IOC_CMD_SESSION_DESTORY_RQ,
     NULL,
     //M2M_PROTO_IOC_CMD_SESSION_DESTORY_ACK,
     NULL,
-    //M2M_PROTO_IOC_CMD_RECVPKT_RQ,
-    (m2m_func)_proto_m2m_recvpkt,
+    // M2M_PROTO_IOC_CMD_SESSION_OBSERVER_RQ,
+	(m2m_func) observer_rq,
+	// M2M_PROTO_IOC_CMD_SESSION_OBSERVER_ACK,
+	(m2m_func) observer_ack,
+	//M2M_PROTO_IOC_CMD_RECVPKT_RQ,
+    (m2m_func)pkt_receive,
     //M2M_PROTO_IOC_CMD_DECODE_PKT_RQ,   //对接收包进行分拆。
-    (m2m_func)_proto_m2m_dec,
+    (m2m_func)pkt_decode,
     // M2M_PROTO_IOC_CMD_ERR_PKT_RQ,      // 包解析层面出错，秘钥、crc、protocol 错误
-    (m2m_func)_proto_m2m_pkt_err_ack,       // 15
+    (m2m_func)error_ack,       // 15
     // M2M_PROTO_IOC_CMD_ERR_PKT_ACK,
-    (m2m_func)_proto_m2m_pkt_err_ack,
+    (m2m_func)error_ack,
     
 #ifdef CONF_BROADCAST_ENABLE 
     //M2M_PROTO_IOC_CMD_BROADCAST_SEND
@@ -662,6 +765,10 @@ m2m_func _m2m_protocol_funcTable[M2M_PROTO_CMD_MAX + 1] =
 
     // M2M_PROTO_IOC_CMD_RELAY
     (m2m_func)relay_package,
+   // M2M_PROTO_IOC_NET_SETKEY_RQ,
+	 (m2m_func) net_secretsky_set_rq,
+	// M2M_PROTO_IOC_NET_SETKEY_ACK,
+	 (m2m_func) net_secretsky_set_ack,
     // M2M_PROTO_IOC_CMD_ONLINK_CHECK
     (m2m_func)onlinkchek_rq,
     // M2M_PROTO_IOC_CMD_ONLINK_CHECK_ACK
@@ -703,5 +810,5 @@ M2M_Return_T m2m_protocol_init(M2M_Protocol_T *p_proto){
 **  2.
 ***********/
 M2M_Return_T m2m_protocol_deInit(M2M_Protocol_T *p_proto){
-
+    return 0;
 }

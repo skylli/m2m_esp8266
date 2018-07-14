@@ -10,9 +10,22 @@
 #include <stdio.h>
 #include <time.h>
 #include "../../include/m2m_type.h"
+#include "../../config/config.h"
+
 #include "m2m_log.h"
 
-u8 g_log_level = 0;
+u8 g_log_level = M2M_LOG_ALL;
+
+#ifdef CONF_LOG_TIME
+void current_time_printf(void){
+    time_t timep;
+    struct tm *p;
+    time(&timep);
+    p = localtime(&timep); //取得当地时间
+    m2m_printf ("%d%02d%02d ", (1900+p->tm_year), (1+p->tm_mon), p->tm_mday);
+    m2m_printf("%02d:%02d:%02d  ", p->tm_hour, p->tm_min, p->tm_sec);
+}
+#endif //CONF_LOG_TIME
 
 #ifdef C_HAS_FILE
 

@@ -38,7 +38,6 @@ void setup()
 	Serial.println(WiFi.localIP());
     local_ip_save();
     ret = m2m_setup();
-
 }
 
 void loop()

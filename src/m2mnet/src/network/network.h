@@ -14,7 +14,11 @@
 #include <pthread.h>
 #endif // HAS_LINUX_MUTEX
 
+
+/** net work configration *************************************************/
 #define INTERVAL_PING_TM_MS    DEFAULT_INTERVAL_PING_TM_MS 
+#define MAX_PING_PKG_LOST		(3)
+
 /** struct ***
 * 1. 等待 ack 认领节点队列。
 * 2. ping，接收节点独立一个队列。
@@ -22,13 +26,22 @@
 * 4. 重发管理.
 * 5. 发送缓存，解决一次发送多个包产生拥堵的问题。(服务器需要)。
 ****/
+typedef enum M2M_CONNT_STA{
+	M2M_CONNT_LOST = 0,
+	M2M_CONNET_ON,
+	M2M_CONNET_MAX
+}M2M_connt_Sta;
+typedef struct M2M_CNNT_STATUS{
+	u8 count;
+	M2M_connt_Sta status;
+}M2M_cnnt_status;
 typedef struct M2M_REQUEST_PKT_T{
 
     struct M2M_REQUEST_PKT_T *next;
     
     u8 messageid;
     u8 transmit_count;
-    
+	u8 extra_cmd;      // use with p_extra;
     M2M_Proto_Cmd_T cmd;
     u32 next_send_time;
     u32 register_time;
@@ -36,6 +49,7 @@ typedef struct M2M_REQUEST_PKT_T{
     u16 len;
     Func_arg callback_arg;
     u8 *p_proto_data;
+	void *p_extra;
     
 }M2M_request_pkt_T;
 
@@ -52,6 +66,7 @@ typedef struct NET_REQUEST_NODE_T{
     
     Net_enc_T enc;
     M2M_Address_T remote;
+    M2M_id_T rid;
 
     Func_arg callback_arg;
     M2M_packet_T payload;
@@ -81,9 +96,11 @@ typedef struct SESSION_T{
     u8 messageid;
     u8 sending_id;
     u8 keep_ping_en;
+	M2M_cnnt_status connt;
     Net_enc_T enc;
 
     M2M_session_Sta state;
+	Func_arg callback;
     M2M_Protocol_T protocol;
 
     u32 next_ping_send_tm;   // 下一个 ping time.
@@ -99,15 +116,21 @@ typedef enum M2M_NET_CMD_T{
     M2M_NET_CMD_SESSION_TOKEN_UPDATE,
     M2M_NET_CMD_SESSION_SECRETKEY_SET,
     M2M_NET_CMD_SESSION_DATA_SEND,
-    M2M_NET_CMD_SESSION_PING_SEND,
+    M2M_NET_CMD_SESSION_PING_SEND,    
+    M2M_NET_CMD_SESSION_CONNT_CHECK,
+
+	M2M_NET_CMD_SESSION_OBSERVER_START,
+	M2M_NET_CMD_SESSION_OBSERVER_STOP,
+	M2M_NET_CMD_SESSION_NOTIFY_PUSH,
 
 #ifdef CONF_BROADCAST_ENABLE
     M2M_NET_CMD_BROADCAST_START,  // 开始 广播包
     M2M_NET_CMD_BROADCAST_STOP,
 #endif //CONF_BROADCAST_ENABLE
-
+    M2M_NET_CMD_NET_SECRETKEY_SET,
     M2M_NET_CMD_TRYSYNC,
-    M2M_NET_CMD_ONLINE_CHECK,
+    M2M_NET_CMD_ONLINE_CHECK,    
+    M2M_NET_CMD_CONNT_CHECK,
     
     M2M_NET_CMD_MAX
     
@@ -123,7 +146,7 @@ typedef struct  NET_INIT_ARGS_T{
     u16 port;
     u16 hostport;
     u32 max_router_tm;
-    Func_arg func_arg;
+    Func_arg callback;
     
 }Net_Init_Args_T;
 typedef struct NET_HOST_T{
@@ -133,6 +156,7 @@ typedef struct NET_HOST_T{
     void *p_router_list;
     M2M_Address_T addr;
 
+	M2M_cnnt_status connt;
     u8 keep_ping_host_en;// 持续向 host 发送 ping包.
     u8 relay_en;
     u8 msgid;
@@ -155,11 +179,11 @@ typedef struct NET_T{
     Session_T *p_session_head;
     M2M_Protocol_T protocol;
     m2m_func ioctl_session;
-    Func_arg func_arg;
+    Func_arg callback;
     M2M_id_T my;
     Net_enc_T enc;
     
-    Net_request_node_T *p_request_hd;    // 所有的广播包.
+    Net_request_node_T *p_request_hd;    // 所有的广播包.    
     u8 broadcast_en;
     size_t key_addr; // 秘钥保存的索引.
     u16 stoken_index;
@@ -169,8 +193,7 @@ typedef struct NET_T{
 #ifdef HAS_LINUX_MUTEX
     pthread_mutex_t locker;
 #endif
-    Net_host_T host;
-    
+    Net_host_T host;    
 }Net_T;
 
 typedef struct NET_REMOT_ADDRESS_T{
@@ -184,8 +207,8 @@ typedef struct  NET_ARGS_T{
     Net_Remot_Address_T remote;
     Net_enc_T enc;
     Func_arg callback;
-    
-    u16 len;
+	void *p_extra;
+	u16 len;
     void *p_data;
 }Net_Args_T;
 

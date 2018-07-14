@@ -69,7 +69,7 @@ int list_add( Relay_node_T **pp,M2M_id_T *p_id,M2M_Address_T *p_addr){
     *pp = p_hd;
     
     m2m_debug_level(M2M_LOG,"devices online list ip is %d.%d.%d.%d \n", p_addr->ip[0], p_addr->ip[1], p_addr->ip[2], p_addr->ip[3]);
-    m2m_bytes_dump("list device add: ", (u8*)p_id, sizeof(M2M_id_T));
+    m2m_bytes_dump((u8*)"list device add: ", (u8*)p_id, sizeof(M2M_id_T));
     return 0;
 }
 Relay_node_T *list_node_find(Relay_node_T *p_hd,M2M_id_T *p_id){
@@ -102,7 +102,7 @@ int relay_list_add( void **pp,M2M_id_T *p_id,M2M_Address_T *p_addr){
     if(p_find ){
         
         m2m_debug_level(M2M_LOG,"devices online update \n");
-        m2m_bytes_dump("update device id is: ", (u8*)p_id, sizeof(M2M_id_T));
+        m2m_bytes_dump((u8*)"update device id is: ", (u8*)p_id, sizeof(M2M_id_T));
         mcpy( (u8*)&p_find->addr, (u8*)p_addr,sizeof(M2M_Address_T));
         p_find->alive_time = m2m_current_time_get();
     }
@@ -134,7 +134,7 @@ int relay_list_update(void **pp,u32 max_tm){
     
     LL_FOREACH_SAFE(p_hd, p_el, p_tmp){
         if( A_BIGER_U32(curr_tm, (p_el->alive_time + max_tm ) ) ){
-            m2m_bytes_dump("device have been time out delete it:", (u8*)&p_el->id, sizeof(M2M_id_T));
+            m2m_bytes_dump((u8*)"device have been time out delete it:", (u8*)&p_el->id, sizeof(M2M_id_T));
             LL_DELETE(p_hd,p_el);
             mfree(p_el);
         }

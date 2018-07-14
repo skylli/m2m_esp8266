@@ -1,6 +1,8 @@
 #ifndef _CONFIG_H
 #define _CONFIG_H
 
+/**log define ****/
+//#define CONF_LOG_TIME		1
 //#define HAS_LINUX_MUTEX	1
 /** net thing **/
 #define PROTO_VERSION_HDR   (1)
@@ -35,7 +37,7 @@
 #define DEFAULT_DEVICE_PORT (9529)
 #define DEFAULT_APP_PORT (9528)
 #define DEFAULT_SERVER_PORT (9527)
-#define DEFAULT_HOST ("192.168.0.222")
+#define DEFAULT_HOST ("192.168.0.196")
 #define DEFAULT_INTERVAL_PING_TM_MS  (10*1000)
 
 #define DEFAULT_DEVICE_KEY   "1234567890123456"

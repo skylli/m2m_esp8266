@@ -15,6 +15,7 @@ typedef struct ROUTER_HDR_T{
     u8 msgid;
     u8 crc8;
     u32 stoken;
+	u32 ctoken;
     M2M_id_T dst_id;
     M2M_id_T src_id;
     u16 payloadlen;

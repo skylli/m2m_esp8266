@@ -18,7 +18,7 @@
 #ifdef __cplusplus
 extern "C"{
 #endif
-
+#include "m2m.h"
 /**********************************************
 ** description: 读取秘钥.
 ** args:    

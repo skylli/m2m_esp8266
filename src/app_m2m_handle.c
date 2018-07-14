@@ -18,34 +18,54 @@
 #define TST_DEV_LOCAL_PORT  (9529)
 #define TST_DEV_LOCAL_KEY   "1234567890123456"
 
-#define TST_DEV_SERVER_HOST  ("192.168.0.222")
-#define TST_DEV_SERVER_PORT (9527)
+#define TST_REMOTE_HOST  ("192.168.0.196")
+#define TST_REMOTE_PORT (9528)
 
+#define TST_SERVER_HOST  ("192.168.0.196")
+#define TST_SERVER_PORT (9527)
+
+#define NOTIFY_INTERVAL_TM 	(1000)  // 定时发送 notify 的时间间隔
+#define TST_DEVOBS_NOTIFY_PUS1	("abcd123")
+#define TCONF_NOTIFY_DATA1	"notify test data111"
 
 /*************************************************************/
 extern char *getlocal_ip(void);
 
-
 static M2M_id_T device_id;
 static M2M_T m2m;
 static BOOL destory_flag = 0;
-void dev_callback(int code,M2M_packet_T **pp_ack_pkt, M2M_packet_T *p_recv_pkt,void *p_arg);
+void dev_callback(int code,M2M_packet_T **pp_ack_pkt, void *p_r,void *p_arg);
+
+typedef struct DEV_OBS_T
+{
+	void *p_node;
+	int obs_rq_cnt;
+	int notify_cnt;
+	int reobserver_cnt;
+	BOOL reobserver_en;
+	BOOL notify_push_en;
+	BOOL exit;
+} Dev_obs_T;
+static Dev_obs_T obs;
+
+
 
 int m2m_setup(void){
     M2M_conf_T conf;
-    
-    mmemset((u8*)&conf.host_id, 0, sizeof(M2M_T));
-    device_id.id[0] = TST_DEV_LOCAL_ID; // 
+    M2M_id_T hid;
+
+    mmemset( (u8*)&hid, 0, sizeof(M2M_id_T));
+    device_id.id[ID_LEN - 1] = TST_DEV_LOCAL_ID; 
 
     conf.def_enc_type = M2M_ENC_TYPE_AES128;
     conf.max_router_tm = 10*60*1000;
     conf.do_relay = 0;
     m2m_int(&conf);
-
+//size_t m2m_net_creat( M2M_id_T *p_id,int port, int key_len, u8 *p_key, M2M_id_T *p_hid,u8 *p_host, int hostport,m2m_func func, void *p_args)
     //m2m.net = m2m_net_creat( &device_id,TST_DEV_LOCAL_PORT, strlen(TST_DEV_LOCAL_KEY),TST_DEV_LOCAL_KEY,\
     //                        TST_DEV_SERVER_HOST, TST_DEV_SERVER_PORT,(m2m_func)dev_callback,NULL);
     m2m.net = m2m_net_creat( &device_id,TST_DEV_LOCAL_PORT, strlen(TST_DEV_LOCAL_KEY),TST_DEV_LOCAL_KEY,\
-                        NULL, TST_DEV_SERVER_PORT,(m2m_func)dev_callback,NULL);
+                            &hid,TST_SERVER_HOST, TST_SERVER_PORT,(m2m_func)dev_callback, &obs);
     if( m2m.net == 0 ){
         m2m_printf(" creat network failt !!\n");
         return -1;
@@ -53,6 +73,7 @@ int m2m_setup(void){
     return 0;
 }
 int m2m_loop(void){
+	static u32 old_tm = 0;
     // 创建 net ， 谅解到远端服务器。
     // M2M_Return_T m2m_int(M2M_conf_T *p_conf);
     if(destory_flag ){
@@ -62,14 +83,25 @@ int m2m_loop(void){
         system_restart();
         return 0;
     }else{
-        if(m2m.net ){
-            m2m_trysync( m2m.net );
-            
-            }
+		while(1){
+			m2m_trysync( m2m.net );
+			if(obs.p_node ){
+
+				if(DIFF_(old_tm, m2m_current_time_get()) > NOTIFY_INTERVAL_TM){	
+					m2m_session_notify_push( &m2m, obs.p_node, strlen(TCONF_NOTIFY_DATA1),TCONF_NOTIFY_DATA1, dev_callback, &obs);
+					old_tm = m2m_current_time_get();
+				}
+
+			}	
+	    }
     }
+	
     return 1;
 }
-void dev_callback(int code,M2M_packet_T **pp_ack_data,M2M_packet_T *p_recv_data,void *p_arg){
+void dev_callback(int code,M2M_packet_T **pp_ack_data,void *p_r,void *p_arg){
+	M2M_obs_payload_T *p_robs = NULL;
+	Dev_obs_T *p_devobs = NULL;
+	M2M_packet_T *p_recv_data = (M2M_packet_T*)p_r;
 
     switch(code){
         case M2M_REQUEST_BROADCAST: 
@@ -90,6 +122,51 @@ void dev_callback(int code,M2M_packet_T **pp_ack_data,M2M_packet_T *p_recv_data,
                 *pp_ack_data = p_ack;
             }
             break;
+	
+		case M2M_REQUEST_OBSERVER_RQ:
+		
+			if(!p_arg || !p_r)
+				break;
+			
+			p_devobs = (Dev_obs_T*) p_arg;	
+			p_robs = (M2M_obs_payload_T*) p_r;
+			p_devobs->p_node = p_robs->p_obs_node;
+			p_devobs->notify_push_en = 1;
+			p_devobs->obs_rq_cnt++;
+			m2m_log("receive an observer request.");
+			if(p_robs->p_payload->len && p_robs->p_payload->p_data){
+				m2m_log("request data: %s", p_robs->p_payload->p_data);
+			}
+			break;
+		case M2M_ERR_OBSERVER_DISCARD:
+			m2m_log("observer have been destory.");
+			if(!p_arg || !p_r )
+				break;
+			p_devobs = (Dev_obs_T*) p_arg;	
+			p_robs = (M2M_obs_payload_T*) p_r;
+			p_devobs->p_node = p_robs->p_obs_node;			
+			p_devobs->exit = 1;
+			break;
+		
+		case M2M_REQUEST_NOTIFY_PUSH:
+			if(!p_arg || !p_r)
+				break;
+			
+
+			m2m_log("receive an notify request.");
+			if(p_robs->p_payload->len && p_robs->p_payload->p_data){
+				m2m_log("request data: %s", p_robs->p_payload->p_data);
+			}
+			break;			
+		case M2M_REQUEST_NOTIFY_ACK:
+			if(!p_arg || !p_r )
+				break;
+
+			p_devobs = (Dev_obs_T*) p_arg;	
+			p_robs = (M2M_obs_payload_T*) p_r;
+			p_devobs->p_node = p_robs->p_obs_node;
+			p_devobs->notify_push_en = 1;
+			break;
         default:
             if( p_recv_data && p_recv_data->len > 0 && p_recv_data->p_data){
                 M2M_packet_T *p_ack = (M2M_packet_T*)mmalloc(sizeof(M2M_packet_T));
@@ -111,7 +188,7 @@ void dev_callback(int code,M2M_packet_T **pp_ack_data,M2M_packet_T *p_recv_data,
 
  }
 
-
+/** 以下函数无需修改，只需声明即可.****************************************************************/
 /**********************************************
 ** description: 读取秘钥.
 ** args:    

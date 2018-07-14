@@ -23,6 +23,7 @@ extern "C"
 #define M2M_LOG_WARN   (3)
 #define M2M_LOG_ERROR  (4)
 
+
 #define m2m_printf  printf
 typedef enum M2M_BASE_CMD{
     M2M_BCMD_ONLINE_CHECK = 0,
@@ -34,9 +35,14 @@ typedef enum M2M_RETURN_T
 {
 /************* request cmd  服务器 设备端 支持， 对于 发起会话的 app 端并不需支持******************************/
     M2M_REQUEST_DATA = 100, 
-    M2M_REQUEST_SET_SECRETKEY = 101, 
+    M2M_REQUEST_NET_SET_SECRETKEY = 101,     
+    M2M_REQUEST_SESSION_SET_SECRETKEY = 102, 
     M2M_REQUEST_BROADCAST = 102,
     M2M_REQUEST_BROADCAST_ACK = 103,
+    M2M_REQUEST_OBSERVER_RQ = 104,
+    M2M_REQUEST_NOTIFY_PUSH = 105,
+    M2M_REQUEST_NOTIFY_ACK = 106,
+    
 /***************** http return *************************/
     M2M_HTTP_OK = 200,
     M2M_HTTP_CREATED = 201,
@@ -60,10 +66,19 @@ typedef enum M2M_RETURN_T
     M2M_ERR_IGNORE = -5,
     M2M_ERR_RETRANSMIT = -6,
     M2M_ERR_TIMEOUT     =-7,
-    
+	M2M_ERR_REQUEST_DESTORY	=-8,
+	M2M_ERR_OBSERVER_DISCARD = -9,
+
     M2M_ERR_PROTO_PKT_BUILD = -13
 /*****************************************/
 }M2M_Return_T;
+
+typedef enum PKT_ACK_TYPE_T{
+	TYPE_ACK_MUST = 0,
+	TYPE_ACK_NONE,
+	TYPE_ACK_MAX
+}Pkt_ack_type_T;
+
 typedef enum ENCRYPT_TYPT_T{
     M2M_ENC_TYPE_NOENC = 0,     // 目前只有 ping 包没有加密.
     M2M_ENC_TYPE_AES128,    // 4*32 bit key.
@@ -86,6 +101,7 @@ typedef enum M2M_SESSION_STA{
     M2M_SESSION_STA_HAS_TOKEN
     
 }M2M_session_Sta;
+
 typedef struct M2M_ADDRESS_T
 {
     u8 len;
@@ -126,6 +142,10 @@ typedef struct M2M_PAYLOAD_T{
     u32 len;
     u8 p_data[0];
 }M2M_payload_T;
+typedef struct M2M_OBS_PAYLOAD_T{
+    void *p_obs_node;
+    M2M_packet_T *p_payload;
+}M2M_obs_payload_T;
 
 // 路由表中每一项的结构
 

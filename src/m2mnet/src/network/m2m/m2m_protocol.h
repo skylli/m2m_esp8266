@@ -22,6 +22,7 @@ typedef struct M2M_PROTO_CMD_ARG_T{
     u8 messageid;
     u32 ctoken;
     u32 stoken;
+	u32 token;
     M2M_id_T src_id;
     M2M_id_T dst_id;
     Net_enc_T *p_enc;
@@ -30,7 +31,7 @@ typedef struct M2M_PROTO_CMD_ARG_T{
     M2M_Address_T address;
     u16 payloadlen;
     u8 *p_payload;
-
+	void *p_extra;
 }M2M_Proto_Cmd_Arg_T;
 
 
@@ -43,7 +44,8 @@ typedef struct M2M_PROTO_RECV_RAWPKT_T{
     M2M_Address_T remote;
     Encrypt_type_T enc_type;
 
-    u32 stoken;
+    u32 stoken;	// master 产生   session master 方的标示.
+	u32 ctoken; // client 产生 session client 方的标示.
     M2M_packet_T payload;
 }M2M_proto_recv_rawpkt_T;
 typedef struct M2M_PROTO_DEC_RECV_PKT_T{
@@ -53,8 +55,9 @@ typedef struct M2M_PROTO_DEC_RECV_PKT_T{
     u8 cmd;
     u8 msgid;
     u16 code;
-    u32 ctoken;
+    u32 token; // 加密通道 token,严谨的设计需要添加时效。 
     M2M_packet_T payload;
+	void *p_extra;
 }M2M_proto_dec_recv_pkt_T;
 typedef struct M2M_DEC_ARGS_T{
     M2M_proto_dec_recv_pkt_T *p_dec;
@@ -70,11 +73,13 @@ typedef struct M2M_PROTO_ACK_T{
 
     u32 ctoken;
     u32 stoken;
+	u32 token;
     M2M_id_T src_id;
     M2M_id_T dst_id;
     Net_enc_T *p_enc;
     M2M_Address_T remote_addr;
     M2M_packet_T payload;
+	void *p_extra;
 }M2M_proto_ack_T;
 // 定义协议相关，协议类型(todo)，协议入口函数
 typedef struct M2M_PROTOCOL_T{
@@ -92,8 +97,22 @@ typedef struct M2M_PROTOCOL_RELAY_T{
     M2M_packet_T *p_payload;
 }M2M_protocol_relay_T;
 
+/** observer define ******************************************/
+typedef struct M2M_OBSERVER_T{
 
+	//u8 obs_type;
+	u8 ack_type;
+	u8 lost_index;	
+	u8 retransmit_cnt;
 
+	u16 index;	
+	u32 next_send_tm;	
+
+	Func_arg callback;
+	M2M_packet_T payload;
+}M2M_observer_T;
+
+/***********************************************************/
 // 远端主动发送过来的命令，注意这时候 本地没有该包 session的任何信息.
 typedef enum M2M_PROTO_IOCTL_CMD_T{
 
@@ -102,14 +121,20 @@ typedef enum M2M_PROTO_IOCTL_CMD_T{
     M2M_PROTO_IOC_CMD_SESSION_CREAT_ACK,
     M2M_PROTO_IOC_CMD_TOKEN_RQ,
     M2M_PROTO_IOC_CMD_TOKEN_ACK,
-    M2M_PROTO_IOC_CMD_SETKEY_RQ, // 5
-    M2M_PROTO_IOC_CMD_SETKEY_ACK,
+    M2M_PROTO_IOC_CMD_SESSION_SETKEY_RQ, // 5
+    M2M_PROTO_IOC_CMD_SESSION_SETKEY_ACK,
     M2M_PROTO_IOC_CMD_PING_RQ,
     M2M_PROTO_IOC_CMD_PING_ACK,
     M2M_PROTO_IOC_CMD_DATA_RQ,
     M2M_PROTO_IOC_CMD_DATA_ACK, // 10
     M2M_PROTO_IOC_CMD_SESSION_DESTORY_RQ, 
     M2M_PROTO_IOC_CMD_SESSION_DESTORY_ACK,
+	
+	M2M_PROTO_IOC_CMD_SESSION_OBSERVER_RQ,
+    M2M_PROTO_IOC_CMD_SESSION_OBSERVER_ACK,
+    //M2M_PROTO_IOC_CMD_SESSION_NOTIFY_PUSH_RQ,
+    //M2M_PROTO_IOC_CMD_SESSION_NOTIFY_PUSH_ACK,   
+
     M2M_PROTO_IOC_CMD_RECVPKT_RQ,
     M2M_PROTO_IOC_CMD_DECODE_PKT_RQ,   // 对接收包进行分拆。
     M2M_PROTO_IOC_CMD_ERR_PKT_RQ,      //15 包解析层面出错，秘钥、crc、protocol 错误
@@ -121,7 +146,10 @@ typedef enum M2M_PROTO_IOCTL_CMD_T{
 #endif // CONF_BROADCAST_ENABLE
 
     M2M_PROTO_IOC_CMD_RELAY,
-    
+
+	M2M_PROTO_IOC_NET_SETKEY_RQ,
+    M2M_PROTO_IOC_NET_SETKEY_ACK,
+
     M2M_PROTO_IOC_CMD_ONLINK_CHECK,
     M2M_PROTO_IOC_CMD_ONLINK_CHECK_ACK,
     
@@ -135,14 +163,21 @@ typedef enum M2M_PROTO_CMD_T{
     M2M_PROTO_CMD_SESSION_CREAT_ACK,// 2
     M2M_PROTO_CMD_TOKEN_RQ,// 3
     M2M_PROTO_CMD_TOKEN_ACK,//4
-    M2M_PROTO_CMD_SETKEY_RQ,// 5
-    M2M_PROTO_CMD_SETKEY_ACK,
-    M2M_PROTO_CMD_PING_RQ,
+    
+	M2M_PROTO_CMD_SESSION_SETKEY_SET_RQ,// 5
+    M2M_PROTO_CMD_SESSION_SETKEY_SET_ACK, //6
+
+	M2M_PROTO_CMD_PING_RQ,//7
     M2M_PROTO_CMD_PING_ACK,
-    M2M_PROTO_CMD_DATA_RQ,
+    M2M_PROTO_CMD_DATA_RQ,//9
     M2M_PROTO_CMD_DATA_ACK,//10
-    M2M_PROTO_CMD_SESSION_DESTORY_RQ,
+    M2M_PROTO_CMD_SESSION_DESTORY_RQ, //11
     M2M_PROTO_CMD_SESSION_DESTORY_ACK,
+
+	M2M_PROTO_CMD_SESSION_OBSERVER_RQ,//13
+    M2M_PROTO_CMD_SESSION_OBSERVER_ACK,
+    // M2M_PROTO_CMD_SESSION_NOTIFY_PUSH_RQ,
+    // M2M_PROTO_CMD_SESSION_NOTIFY_PUSH_ACK,   
 
     M2M_PROTO_CMD_RECVPKT,
     M2M_PROTO_CMD_DECODE_PKT_RQ,   //对接收包进行分拆。
@@ -155,6 +190,8 @@ typedef enum M2M_PROTO_CMD_T{
 #endif // CONF_BROADCAST_ENABLE
 
     M2M_PROTO_CMD_RELAY,
+	M2M_PROTO_CMD_NET_SETKEY_RQ,
+    M2M_PROTO_CMD_NET_SETKEY_ACK,
 
     M2M_PROTO_CMD_ONLINK_CHECK_RQ,
     M2M_PROTO_CMD_ONLINK_CHECK_ACK,

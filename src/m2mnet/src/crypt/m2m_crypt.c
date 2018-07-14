@@ -71,7 +71,7 @@ int data_dec(const char *src, char *dst, int len, int keylen, u8 *p_key)
     if( keylen != 16 || !p_key )
         return -1;
 
-    // m2m_bytes_dump("befer decode data :", src, len);
+    //m2m_bytes_dump("befer decode data :", src, len);
     count = 0;
     while(len >= 16)
     {
@@ -80,7 +80,7 @@ int data_dec(const char *src, char *dst, int len, int keylen, u8 *p_key)
         count += 16;
         len -= 16;
     }
-    // m2m_bytes_dump("after decode data :", dst, count);
+    //m2m_bytes_dump("after decode data :", dst, count);
 
     return count;
 }

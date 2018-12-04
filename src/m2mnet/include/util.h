@@ -33,7 +33,15 @@
 // 两个值的相对差
 #define DIFF_(a,b)                  (( a>b )?( a-b ):( b-a ))
 
-#define A_BIGER(a,b,large)            ((a>b) ? (1):( (DIFF_(a,b) > large)?1:0 ))
+// todo 大端不一样
+#define M_BITSET(v,n)	( v | (0x01<<(n-1)) )
+#define M_BITUNSET(v,n)	( v & (~(0x01<<(n-1)) ))
+#define M_BITGET(v,n)	( ( v>>(n-1) ) & 0x01 )
+
+#define M_MIN(a,b)		((a>b)?b:a)
+#define M_MAX(a,b)		( (a>b)?a:b)
+
+#define A_BIGER(a,b,large)            ((a>b) ? (TRUE):( (DIFF_(a,b) > large)?TRUE:FALSE ))
 #define A_BIGER_U32(a,b)    A_BIGER(a,b,0x7fffffff)
 #define A_BIGER_U16(a,b)    A_BIGER(a,b,0x7fff)
 #define A_BIGER_U8(a,b)    A_BIGER(a,b,0x7f)
@@ -52,10 +60,34 @@
 // 转换
 #define CHAR_BELONG(c,a,b)  ( a <= c && c <=b)
 #define BYTE_IS_HEX(c)   (('0'<= c && c<='9')|| ('a'<=c && c <= 'f') || ('A'<=c && c <= 'F'))
-#define CHAR_2_INT(n,c)  n = (CHAR_BELONG(c,'0','9')?(c-'0'):( CHAR_BELONG(c, 'a', 'b')?(c-'a'+10):( CHAR_BELONG(c,'A','F')?(c-'A' + 10):n) ) )
+#define CHAR_2_INT(n,c)  n = (CHAR_BELONG(c,'0','9')?(c-'0'):( CHAR_BELONG(c, 'a', 'f')?(c-'a'+10):( CHAR_BELONG(c,'A','F')?(c-'A' + 10):n) ) )
+#if 0
 #define STR_2_INT_ARRAY(d,s,len) do{ int i=0; \
                                  for(i=0;i<len;i++){ CHAR_2_INT(d[i],s[i]);} }while(0)
-                                    
+
+#define STR_2_INT_ARRAY_ORDER(d,s,len) 	do{ int i=0; \
+											for(i=0;i<len;i++){ CHAR_2_INT(d[i],s[ (len-i -1) ]);} }while(0)
+#define STR_2_HEX_ARRAY(d,s,len)		do{ int i,j; \
+											for(i=0,j=0; i<len;i++,j++){ \
+												d[j] = ( (i+1) > len )?s[i]:( ( 16 *((int)s[i+1]) ) + s[i]); i++;}\
+										}while(0)
+
+#endif
+#define HEX_2_CHAR(c,n)	c = (n >= 10)?(n-10+'a'):(n + '0');
+#define HEX_2_STR(d,s,len)	do{	int i,j;for(i=0,j=0;i<len;i++,j++){\
+									d[j] =s[i]/16; HEX_2_CHAR(d[j],d[j]);j++;d[j] = s[i]%16; HEX_2_CHAR(d[j],d[j]);}\
+								}while(0)
+#define HEX_2_STR(d,s,len)	do{	int i,j;for(i=len-1,j=0;i>=0;i--,j++){\
+										d[j] =s[i]/16; HEX_2_CHAR(d[j],d[j]);j++;d[j] = s[i]%16; HEX_2_CHAR(d[j],d[j]);}\
+									}while(0)
+
+#define malloc_cpy(d,dlen,s,slen,ret)	do{ if(d && s && slen > 0){\
+											d = mmalloc(slen);\
+											_RETURN_EQUAL_0(d, ret);\
+											mcpy(d,s,slen);\
+											dlen = slen;\
+											}}while(0)
+								 
 #ifdef __cplusplus
                                  extern "C"{
 #endif
@@ -65,6 +97,10 @@ int mmemset(u8 *dst,u8 c,size_t n);
 
 void mfree(void *ptr);
 void mcpy(u8 *d,u8 *s,int len);
+int string2hexarry(u8 *p_dst, const u8 *p_s, int nlen);
+
+int product_id_head_set(u8 *p_id,char ver, char type, s16 dclass, u32 pid, u8 *p_mac);
+void product_id_print(u8 *p_id);
 
 #ifdef __cplusplus
 }

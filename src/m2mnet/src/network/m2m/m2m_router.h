@@ -15,6 +15,7 @@ typedef struct ROUTER_HDR_T{
     u8 msgid;
     u8 crc8;
     u32 stoken;
+	u32 ctoken;
     M2M_id_T dst_id;
     M2M_id_T src_id;
     u16 payloadlen;
@@ -26,7 +27,7 @@ typedef struct ROUTER_HDR_T{
 void *relay_list_creat();
 void relay_list_destory(void **pp);
 int relay_list_add( void **pp,M2M_id_T *p_id,M2M_Address_T *p_addr);
-M2M_Address_T *list_addr_find(void *p,M2M_id_T *p_id);
+int list_addr_find(M2M_Address_T *p_addr,    void *p,M2M_id_T *p_id);
 int relay_list_update(void **pp,u32 max_tm);
 
     

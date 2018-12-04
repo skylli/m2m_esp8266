@@ -14,7 +14,7 @@
 
 #include "../network/network.h"
 #include "../network/m2m/m2m_protocol.h"
-#include "../util/m2m_log.h"
+#include "../../include/m2m_log.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -31,6 +31,12 @@ M2M_conf_T m2m_conf;
                                 arg.p_s = (Session_T*) p_m2m->session;  \
                                 arg.callback.func = func;   \
                                 arg.callback.p_user_arg = p_args;  }while(0)
+
+
+u8 *m2m_version(void){
+    return m2m_conf.p_version;
+}
+
 // 创建一个 net
 // 一个 net 维护一个 port，同时在一个 net 里可以创建多个 session
 /**
@@ -44,31 +50,51 @@ M2M_conf_T m2m_conf;
 **              注意： 收到发送给本 id 的包才会触发，其它包则丢弃，或者 直接转发.
 **         
 **********************/
-size_t m2m_net_creat( M2M_id_T *p_id,int port, int key_len, u8 *p_key, u8 *p_host, int hostport,m2m_func func, void *p_args){
+size_t m2m_net_creat( M2M_id_T *p_id,int port, int key_len, u8 *p_key, M2M_id_T *p_hid,u8 *p_host, int hostport,m2m_func func, void *p_args){
 
+	u8 *p_key_alloc = NULL;
     Net_Init_Args_T cmd;
     Net_T *p_n = NULL;
     m2m_log_debug("creating Net...");
     mmemset( (u8*) &cmd,0,sizeof(Net_Init_Args_T));
 
     mcpy((u8*) &cmd.my, (u8*)p_id,sizeof(M2M_id_T));
-    mcpy((u8*) &cmd.host_id, (u8*) &m2m_conf.host_id, sizeof(M2M_id_T));
-    cmd.port = port;
+
+	if(p_hid)
+    	mcpy((u8*) &cmd.host_id, (u8*) p_hid, sizeof(M2M_id_T));
+	
+
+	cmd.port = port;
     cmd.p_host = p_host;
     
-    cmd.func_arg.func = func;
-    cmd.func_arg.p_user_arg = p_args;
+    cmd.callback.func = func;
+    cmd.callback.p_user_arg = p_args;
     cmd.enc.type = m2m_conf.def_enc_type;
-    cmd.enc.keylen = key_len;
-    cmd.enc.p_enckey = p_key;
-    cmd.max_router_tm = m2m_conf.max_router_tm;
+
+	if(key_len < 16){
+		p_key_alloc = (u8*)mmalloc(17);
+		_RETURN_EQUAL_0(p_key_alloc, 0);
+		mcpy(p_key_alloc, p_key, key_len);
+		cmd.enc.keylen = 16;
+		cmd.enc.p_enckey = p_key_alloc;
+	}else{
+		cmd.enc.keylen = key_len;
+    	cmd.enc.p_enckey = p_key;
+		}
+	cmd.max_router_tm = m2m_conf.max_router_tm;
     cmd.relay_en = m2m_conf.do_relay;
     cmd.max_router_tm = 6* (DEFAULT_INTERVAL_PING_TM_MS);
     cmd.hostport =  hostport;
 
+	// printf log 
+	m2m_bytes_dump(">> local id is:", (u8*)&cmd.my, sizeof(M2M_id_T));
+	m2m_bytes_dump(">> local key is:", (u8*)cmd.enc.p_enckey, cmd.enc.keylen);
+	
     // creat network
     p_n = net_creat(&cmd,0);
     m2m_log_debug("network <%p> have been creat.\n",p_n);
+
+	mfree(p_key_alloc);
     return (size_t)p_n;
 }
 /**
@@ -81,6 +107,58 @@ M2M_Return_T m2m_net_destory(size_t net){
     return M2M_ERR_NOERR;
 }
 
+M2M_Return_T m2m_net_secretkey_set(size_t net,M2M_id_T *p_id,u8 *p_host,int port, int key_len,u8 *p_key,
+										int newkey_len, u8 *p_newkey,m2m_func func, void *p_args){
+	int ret = 0, klen = 0;
+	Net_T *p_net ;
+	u8 tmp_key[20], new_key[sizeof(Enc_T) + ENC_KEY_LEN +1];
+	Enc_T *p_enc = NULL;
+
+	if( !net || !p_host || !p_id || !p_newkey )
+    	return M2M_ERR_INVALID;
+    
+    Net_Args_T arg;
+	// get net
+	arg.p_net = (Net_T*) net;
+	// get remote id.
+	mcpy( (u8*)&arg.remote_id, (u8*)p_id, sizeof(M2M_id_T));
+	// get remote address.
+	arg.remote.p_host = p_host;
+	arg.remote.dst_address.port = (u16)port;
+	
+	// get old key
+    arg.enc.type = m2m_conf.def_enc_type;
+	if(key_len < ENC_KEY_LEN){
+			mmemset( tmp_key, 0, 20);
+			mcpy(tmp_key, p_key, key_len);
+			arg.enc.p_enckey = tmp_key;
+			arg.enc.keylen = ENC_KEY_LEN;
+		}else{
+			arg.enc.p_enckey = p_key;
+			arg.enc.keylen = key_len;
+		}
+	// get new remote key.
+	mmemset(new_key, 0, sizeof(Enc_T) + ENC_KEY_LEN +1);
+	p_enc = (Enc_T*)new_key;
+	p_enc->type = m2m_conf.def_enc_type;
+	
+	klen = (newkey_len > ENC_KEY_LEN)?ENC_KEY_LEN:newkey_len;
+	p_enc->keylen = ENC_KEY_LEN;
+	
+	mcpy(p_enc->key,p_newkey, klen);
+	arg.p_data = (u8*)p_enc;	
+	arg.len = sizeof(Enc_T) + ENC_KEY_LEN;
+
+	arg.callback.func = func;
+	arg.callback.p_user_arg = p_args;
+
+	p_net = (Net_T*)net;
+	
+	if( p_net->ioctl_session )
+       p_net->ioctl_session( M2M_NET_CMD_NET_SECRETKEY_SET, &arg,0);
+	
+	return M2M_ERR_NOERR;
+}
 // 在 net 里创建一个会话
 // 返回一个 session。
 /**
@@ -101,11 +179,13 @@ size_t m2m_session_creat(size_t net,M2M_id_T *p_id,u8 *p_host,int port, int key_
     arg.p_net = NULL;
     Session_T *p_s = NULL;
 
-    mmemset( (u8*)&arg, 0, sizeof(Net_Args_T));
+	u8 tmp_key[20], tmp_newkey[20];
+	_RETURN_EQUAL_0(net, 0);
+	mmemset( (u8*)&arg, 0, sizeof(Net_Args_T));
     mcpy( (u8*) &arg.remote_id, (u8*)p_id,sizeof(M2M_id_T));
     
     m2m_log_debug("net <%p> creating session...", (void*)net);
-
+	
     // get ip or port.
     if( !p_host || !p_key){
         m2m_debug_level( M2M_LOG_WARN,"host or  secret key not find \n");
@@ -115,16 +195,24 @@ size_t m2m_session_creat(size_t net,M2M_id_T *p_id,u8 *p_host,int port, int key_
     arg.p_net = p_n;
     // get host
     arg.remote.p_host = p_host;
-    // get secret key
-    arg.enc.type = m2m_conf.def_enc_type;
-    arg.enc.keylen = key_len;
     arg.callback.func = func;
     arg.callback.p_user_arg = p_args;
-    arg.enc.p_enckey = p_key;
     arg.remote.dst_address.port = (u16) port;
     
     arg.len =0;
     arg.p_data = NULL;
+
+    // get secret key
+    arg.enc.type = m2m_conf.def_enc_type;
+	if(key_len < 16){
+			mmemset( tmp_key, 0, 20);
+			mcpy(tmp_key, p_key, key_len);
+			arg.enc.p_enckey = tmp_key;
+			arg.enc.keylen = 16;
+		}else{
+			arg.enc.p_enckey = p_key;
+			arg.enc.keylen = key_len;
+		}
 
     if( p_n->ioctl_session )
         p_s = (Session_T*) p_n->ioctl_session( M2M_NET_CMD_SESSION_CREAT, &arg,0);
@@ -154,6 +242,24 @@ M2M_Return_T m2m_session_destory(M2M_T *p_m2m){
     else 
         return 0;
 }
+BOOL m2m_session_connted(M2M_T *p_m2m){
+
+    Net_Args_T arg;
+    if(!p_m2m)
+    	return M2M_ERR_INVALID;
+    
+    mmemset((u8*)&arg,0,sizeof(Net_Args_T));
+    
+    arg.p_net = (Net_T*) p_m2m->net;
+	arg.p_s = (Session_T*) p_m2m->session;
+    
+    if( arg.p_net->ioctl_session)
+        return ( arg.p_net->ioctl_session( M2M_NET_CMD_SESSION_CONNT_CHECK,&arg,0) );
+    else 
+        return 0;
+
+}
+
 // 申请刷新 session token
 /*****************************************************
 ** description: 向远端申请新的 token.用于更新本会话 token.
@@ -185,29 +291,33 @@ M2M_Return_T m2m_session_token_update(M2M_T *p_m2m,m2m_func func, void *p_args){
 *****************************************************/
 M2M_Return_T m2m_session_secret_set(M2M_T *p_m2m,int len,u8 *p_data,m2m_func func, void *p_args){
 
-    int ret=0;
-    u8 *p = mmalloc(sizeof(Enc_T) + len +1 );
-    Enc_T *p_enc = NULL;
+    int ret=0, klen = 0;
+	Enc_T *p_enc = NULL;
     Net_Args_T arg;
+	u8 tmp_key[sizeof(Enc_T) + ENC_KEY_LEN +1];
 
+
+	if(len <= 0 || !p_data)
+		return M2M_ERR_INVALID;
+	
     mmemset( (u8*)&arg, 0, sizeof(Net_Args_T));
-    _NET_ARG_CPY(arg,p_m2m,func,p_args);
-    if( p == NULL){
-        return M2M_ERR_NULL;
-    }
-    p_enc = (Enc_T*) p;
-    p_enc->type = m2m_conf.def_enc_type;
-    p_enc->keylen = len;
-    mcpy((u8*)p_enc->key, (u8*)p_data,len);
+	mmemset(tmp_key, 0, sizeof(Enc_T) + ENC_KEY_LEN +1);
 
-    
+	_NET_ARG_CPY(arg,p_m2m,func,p_args);
+	
+    arg.enc.type = m2m_conf.def_enc_type;
+	p_enc = (Enc_T*)tmp_key;
+	p_enc->type = m2m_conf.def_enc_type;
+	p_enc->keylen = ENC_KEY_LEN;
+	klen = (len > ENC_KEY_LEN)?ENC_KEY_LEN:len;
+	mcpy(p_enc->key,p_data, klen);
+	
+	arg.p_data = (u8*)p_enc;
+	arg.len = sizeof(Enc_T) + ENC_KEY_LEN;
+
     m2m_log_debug("session (%p)updateing session secret key...", (void*)p_m2m->session);
-    arg.len = (u16)(sizeof(Enc_T) + len);
-    arg.p_data = p;
     if(arg.p_net->ioctl_session)
         ret = ( arg.p_net->ioctl_session(M2M_NET_CMD_SESSION_SECRETKEY_SET,&arg,0) );
-    mfree(p);
-    
     return ret;
 }
 
@@ -221,13 +331,13 @@ M2M_Return_T m2m_session_secret_set(M2M_T *p_m2m,int len,u8 *p_data,m2m_func fun
 **      2. p_user_func - 接收到响应时触发的回调函数.
 ** return: 本地发送是否成功.
 *****************************************************/
-M2M_Return_T m2m_broadcast_data_start(Net_T *p_n,int port,int len,u8 *p_data,m2m_func func, void *p_args){
+M2M_Return_T m2m_broadcast_data_start(size_t        p,int port,int len,u8 *p_data,m2m_func func, void *p_args){
     int ret = 0;
-    if( len ==0 && p_data )
+    if( !p || len ==0 || !p_data )
         return M2M_ERR_INVALID;
     
     Net_Args_T arg;
-
+    Net_T *p_n = (Net_T*) p;
     m2m_log_debug("start broadcast...");
     mmemset( (u8*)&arg,0,sizeof(Net_Args_T));
     arg.p_net = p_n;
@@ -251,8 +361,12 @@ M2M_Return_T m2m_broadcast_data_start(Net_T *p_n,int port,int len,u8 *p_data,m2m
 **      1. p_n: 停止本地 net 的广播包发送.
 ** return: 停止是否出错.
 *****************************************************/
-M2M_Return_T m2m_broadcast_data_stop(Net_T *p_n){
+M2M_Return_T m2m_broadcast_data_stop(size_t p){
     int ret = 0;
+    if( !p)
+        return M2M_ERR_INVALID;
+    
+    Net_T *p_n = (Net_T*)p;
     if( p_n->ioctl_session )
         ret = p_n->ioctl_session( M2M_NET_CMD_BROADCAST_STOP, p_n,0);
     
@@ -260,13 +374,17 @@ M2M_Return_T m2m_broadcast_data_stop(Net_T *p_n){
     return ret;
 }
 
-void m2m_broadcast_enable(Net_T *p_n){
-    if(p_n)
+void m2m_broadcast_enable(size_t p){
+    if(p){
+        Net_T *p_n = (Net_T*) p;
         p_n->broadcast_en = 1;
+    }
 }
-void m2m_broadcast_disable(Net_T *p_n){
-    if(p_n)
+void m2m_broadcast_disable(size_t p){
+    if(p){
+        Net_T *p_n = (Net_T*) p;
         p_n->broadcast_en = 0;
+    }
 }
 
 #endif // CONF_BROADCAST_ENABLE
@@ -296,6 +414,88 @@ M2M_Return_T m2m_session_data_send(M2M_T *p_m2m,int len,u8 *p_data,m2m_func func
         return 0;
 
 }
+// observer 数据发送 
+/*****************************************************
+** description: start observer
+** args:
+**      1. p_m2m - 发送 observer 请求的 net/session。
+**      2. p_len - 数据的长度.  p_data - 数据.
+**      2. p_user_func - 接收到对端响应时触发的回调函数.
+** return: 本地发送是否成功.
+*****************************************************/
+size_t  m2m_session_observer_start(M2M_T *p_m2m,Pkt_ack_type_T ack_type,int len,u8 *p_data,m2m_func func, void *p_args){
+    Net_Args_T arg;
+
+    mmemset((u8*)&arg,0,sizeof(Net_Args_T));
+    _NET_ARG_CPY(arg,p_m2m,func,p_args);
+    
+    m2m_log_debug("session (%p) start to observer.", (void*)p_m2m->session);
+
+    arg.len = len;
+    arg.p_data = p_data;
+	arg.p_extra = (void*)&ack_type;
+    if( arg.p_net->ioctl_session )
+        return (size_t)( arg.p_net->ioctl_session( M2M_NET_CMD_SESSION_OBSERVER_START, &arg,0) );
+    else 
+        return 0;
+}
+/*****************************************************
+** description: stop observer
+** args:
+**      1. p_m2m - 发送 observer 请求的 net/session。
+**      2. p_obserindex: observer 节点的指针
+**      2. p_user_func - 接收到对端响应时触发的回调函数.
+** return: 本地发送是否成功.
+*****************************************************/
+M2M_Return_T m2m_session_observer_stop(M2M_T *p_m2m, void *p_obserindex){
+    Net_Args_T arg;
+	
+	mmemset((u8*)&arg,0,sizeof(Net_Args_T));
+	arg.p_net = (Net_T*)p_m2m->net;
+	arg.p_s = (Session_T*)p_m2m->session;
+	arg.p_extra = (void*)p_obserindex;
+
+    m2m_log_debug("session (%p) stoping observer [%p].", (void*)p_m2m->session, p_obserindex);
+
+	if(!p_obserindex){
+		m2m_log_warn("Can't find observer index %p to stop !!",p_obserindex);
+		return M2M_ERR_INVALID;
+	}
+	if(arg.p_net->ioctl_session)
+        return ( arg.p_net->ioctl_session( M2M_NET_CMD_SESSION_OBSERVER_STOP, &arg,0) );
+    else 
+        return 0;
+}
+/*****************************************************
+** description: push an notify to observer
+** args:
+**      1. p_m2m - 发送 observer 请求的 net/session。
+**		2. len: 推送数据的长度； p_data: 推送的数据;
+**      2. p_obserindex: observer 节点的指针
+**      2. p_user_func - 接收到对端响应时触发的回调函数.
+** return: 本地发送是否成功.
+*****************************************************/
+M2M_Return_T m2m_session_notify_push(M2M_T *p_m2m, void *p_obserindex,int len,u8 *p_data,m2m_func func, void *p_args){
+    Net_Args_T arg;
+
+	if(!p_obserindex){
+		m2m_log_warn("Can't find observer index %p to stop !!",p_obserindex);
+		return M2M_ERR_INVALID;
+	}
+	
+	mmemset((u8*)&arg,0,sizeof(Net_Args_T));
+	
+	arg.len = len;
+    arg.p_data = p_data;
+	arg.p_extra = (void*)p_obserindex;
+    _NET_ARG_CPY(arg,p_m2m,func,p_args);
+
+	m2m_log_debug("node [%p] pushing notify", p_obserindex);
+	if(arg.p_net->ioctl_session)
+        return ( arg.p_net->ioctl_session( M2M_NET_CMD_SESSION_NOTIFY_PUSH, &arg,0) );
+    else 
+        return 0;
+}
 //  查询对应的设备是否在线
 /*****************************************************
 ** description: 设备在线查询
@@ -305,9 +505,12 @@ M2M_Return_T m2m_session_data_send(M2M_T *p_m2m,int len,u8 *p_data,m2m_func func
 **      2. p_user_func - 接收到对端响应时触发的回调函数.
 ** return: 本地发送是否成功.
 *****************************************************/
-M2M_Return_T m2m_dev_online_check(Net_T *p_net, u8 *p_remoteHost, int remote_port, M2M_id_T *p_id, m2m_func func, void *p_args){
+M2M_Return_T m2m_dev_online_check(size_t p, u8 *p_remoteHost, int remote_port, M2M_id_T *p_id, m2m_func func, void *p_args){
     Net_Args_T arg;
-
+    if(!p)
+        return M2M_ERR_INVALID;
+    
+    Net_T *p_net = (Net_T*)p;
     mmemset((u8*)&arg,0,sizeof(Net_Args_T));
     
     arg.p_net = (Net_T*) p_net;        
@@ -325,6 +528,53 @@ M2M_Return_T m2m_dev_online_check(Net_T *p_net, u8 *p_remoteHost, int remote_por
     if(arg.p_net->ioctl_session)
         return ( arg.p_net->ioctl_session( M2M_NET_CMD_ONLINE_CHECK,&arg,0) );
     else 
+        return 0;
+
+}
+/*****************************************************
+** description: 设备掉线事件报告
+** args:
+**      1. net -  当前 net
+** return: True 表明设备已经  断线.
+*****************************************************/
+M2M_Return_T m2m_event_host_offline(size_t net){
+    Net_Args_T arg;
+    if(!net)
+        return M2M_ERR_INVALID;
+    
+    Net_T *p_net = (Net_T*)net;
+	
+    mmemset((u8*)&arg,0,sizeof(Net_Args_T));
+	
+    arg.p_net = p_net;
+    if(p_net->ioctl_session)
+            return ( 0 == p_net->ioctl_session( M2M_NET_CMD_CONNT_CHECK, &arg,0))? TRUE: FALSE;
+    else 
+        return FALSE;
+}
+
+//  本地 net 是否有链接到 server host.
+/*****************************************************
+** description: 设备在线查询
+** args:
+**      1. p - 查询状态的 net。
+** return: 1 net 链接 server host. 否则没有链接。
+*****************************************************/
+BOOL m2m_net_connted(size_t p){
+
+    Net_Args_T arg;
+    if(!p)
+    	return M2M_ERR_INVALID;
+    
+    Net_T *p_net = (Net_T*)p;
+    mmemset((u8*)&arg,0,sizeof(Net_Args_T));
+    
+    arg.p_net = (Net_T*) p_net;        
+    
+    if(arg.p_net->ioctl_session)
+        return ( arg.p_net->ioctl_session( M2M_NET_CMD_CONNT_CHECK,&arg,0) );
+    else 
+
         return 0;
 
 }
@@ -366,6 +616,13 @@ M2M_Return_T m2m_int(M2M_conf_T *p_conf){
         m2m_conf.max_router_tm = 10*60*1000;
         m2m_conf.do_relay = 1;
     }
+	m2m_conf.p_version = NULL;
+#ifdef M2M_VERSION_MAJOR
+	m2m_conf.p_version = mmalloc(10);
+	_RETURN_EQUAL(m2m_conf.p_version, NULL, M2M_ERR_NULL);
+	sprintf(m2m_conf.p_version, "%d.%d.%d", M2M_VERSION_MAJOR, M2M_VERSION_MINOR, M2M_VERSION_PATCH);
+#endif // 
+
     return M2M_ERR_NOERR;
 /** *************************/
 }
@@ -373,6 +630,9 @@ M2M_Return_T m2m_int(M2M_conf_T *p_conf){
 ** description: 注销整个 m2m，并退出
 *****************************************************/
 M2M_Return_T m2m_deint(void){
+	mfree(m2m_conf.p_version);
+	m2m_conf.p_version = NULL;
+
     return 0;
 }
 

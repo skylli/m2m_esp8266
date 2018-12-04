@@ -18,7 +18,7 @@
 #ifdef __cplusplus
 extern "C"{
 #endif
-
+#include "m2m.h"
 /**********************************************
 ** description: 读取秘钥.
 ** args:    
@@ -48,7 +48,7 @@ int m2m_relay_list_add( void **pp,M2M_id_T *p_id,M2M_Address_T *p_addr);
 /**
 ** 查询 id 是否在 list 里，有则说明设备在线并返回
 **************/ 
-M2M_Address_T *m2m_relay_id_find( void *p_r_list,M2M_id_T *p_id);
+int m2m_relay_id_find(M2M_Address_T *p_addr, void *p_r_list,M2M_id_T *p_id);
 
 // 更新列表，当 id 超时没有刷新则直接删除该节点.
 /**********************************************

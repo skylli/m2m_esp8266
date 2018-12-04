@@ -10,7 +10,7 @@
 #include "../../../include/utlist.h"
 #include "../../../include/m2m_port.h"
 
-#include "../../util/m2m_log.h"
+#include "../../../include/m2m_log.h"
 #include <string.h>
 
 // #define _RETURNNONE_PP_IS_NULL(pp)   do{ if( !pp || *pp) return ;}while(0)
@@ -69,7 +69,7 @@ int list_add( Relay_node_T **pp,M2M_id_T *p_id,M2M_Address_T *p_addr){
     *pp = p_hd;
     
     m2m_debug_level(M2M_LOG,"devices online list ip is %d.%d.%d.%d \n", p_addr->ip[0], p_addr->ip[1], p_addr->ip[2], p_addr->ip[3]);
-    m2m_bytes_dump("list device add: ", (u8*)p_id, sizeof(M2M_id_T));
+    m2m_bytes_dump((u8*)"list device add: ", (u8*)p_id, sizeof(M2M_id_T));
     return 0;
 }
 Relay_node_T *list_node_find(Relay_node_T *p_hd,M2M_id_T *p_id){
@@ -82,15 +82,17 @@ Relay_node_T *list_node_find(Relay_node_T *p_hd,M2M_id_T *p_id){
     }
     return NULL;
 }
-M2M_Address_T *list_addr_find(void *p,M2M_id_T *p_id){
+int list_addr_find(M2M_Address_T       *p_addr,void *p,M2M_id_T *p_id){
 
     Relay_node_T *p_hd = (Relay_node_T*)p, *p_el = NULL, *p_tmp = NULL;
     
     LL_FOREACH_SAFE(p_hd,p_el, p_tmp){
-        if( memcmp(&p_el->id, p_id->id,  ID_LEN) == 0)
-            return &p_el->addr;
+        if( memcmp(&p_el->id, p_id->id,  ID_LEN) == 0){
+			mcpy( (u8*)p_addr, (u8*)&p_el->addr, sizeof(M2M_Address_T));
+		}
+            return 0;
     }
-    return NULL;
+    return -1;
 
 }
 
@@ -102,7 +104,7 @@ int relay_list_add( void **pp,M2M_id_T *p_id,M2M_Address_T *p_addr){
     if(p_find ){
         
         m2m_debug_level(M2M_LOG,"devices online update \n");
-        m2m_bytes_dump("update device id is: ", (u8*)p_id, sizeof(M2M_id_T));
+        m2m_bytes_dump((u8*)"update device id is: ", (u8*)p_id, sizeof(M2M_id_T));
         mcpy( (u8*)&p_find->addr, (u8*)p_addr,sizeof(M2M_Address_T));
         p_find->alive_time = m2m_current_time_get();
     }
@@ -134,7 +136,7 @@ int relay_list_update(void **pp,u32 max_tm){
     
     LL_FOREACH_SAFE(p_hd, p_el, p_tmp){
         if( A_BIGER_U32(curr_tm, (p_el->alive_time + max_tm ) ) ){
-            m2m_bytes_dump("device have been time out delete it:", (u8*)&p_el->id, sizeof(M2M_id_T));
+            m2m_bytes_dump((u8*)"device have been time out delete it:", (u8*)&p_el->id, sizeof(M2M_id_T));
             LL_DELETE(p_hd,p_el);
             mfree(p_el);
         }
@@ -192,8 +194,8 @@ int utst_relay_result(int *p_ret,u8 **p_name, int items){
 int tst_relay_list(void){
 
     int ret = 0;
-    M2M_id_T id1,id2,id3;
-    M2M_Address_T addr1,addr2,addr3, addr4, *p_find_addr = NULL;
+    M2M_id_T id1,id2,id3 , a_find;
+    M2M_Address_T addr1,addr2,addr3, addr4, *p_find_addr = &a_find;
 
     mmemset( (u8*)&id1, 0, sizeof(M2M_id_T));
     mmemset( (u8*)&id2, 0, sizeof(M2M_id_T));
@@ -202,6 +204,8 @@ int tst_relay_list(void){
     mmemset( (u8*)&addr1, 0, sizeof(M2M_Address_T));
     mmemset( (u8*)&addr2, 0, sizeof(M2M_Address_T));
     mmemset( (u8*)&addr3, 0, sizeof(M2M_Address_T));  
+	
+    mmemset( (u8*)&p_find_addr, 0, sizeof(M2M_Address_T));  
     /** 初始化设备***/ 
     id1.id[sizeof(M2M_id_T)-1] = 1;
     id2.id[sizeof(M2M_id_T)-1] = 2;
@@ -219,7 +223,7 @@ int tst_relay_list(void){
     relay_list_add( &p_hd, &id3, &addr3);
     
     /** 查找设备 **/ 
-    p_find_addr = list_addr_find(p_hd, &id2);
+    ret = list_addr_find(p_find_addr,p_hd, &id2);
     TST_PRINT_RECORD(p_find_addr,id2);
     p_find_addr = list_addr_find(p_hd, &id3);
     TST_PRINT_RECORD(p_find_addr,id3);
@@ -227,7 +231,7 @@ int tst_relay_list(void){
         utst_relay_ret[UTST_RELAY_ADD] = 1;
     /** 更新多个设备 ***/
     relay_list_add( &p_hd, &id3, &addr4);
-    p_find_addr = list_addr_find(p_hd, &id3);
+    list_addr_find(p_find_addr,p_hd, &id3);
     TST_PRINT_RECORD(p_find_addr,id3);
     if( memcmp(p_find_addr, &addr4,sizeof(M2M_Address_T) ) == 0){
         utst_relay_ret[UTST_RELAY_FIND] = 1;
@@ -238,7 +242,7 @@ int tst_relay_list(void){
     
     relay_list_add( &p_hd, &id2, &addr2);
     relay_list_update(&p_hd, 1000);
-    p_find_addr = list_addr_find(p_hd, &id3);
+    list_addr_find(p_find_addr,p_hd, &id3);
     if(p_find_addr == NULL){
         utst_relay_ret[UTST_RELAY_TIMEOUT] = 1;
     }

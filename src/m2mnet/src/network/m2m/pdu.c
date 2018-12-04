@@ -15,7 +15,7 @@
 #include "option.h"
 #include "../../../include/m2m.h"
 #include "m2m_endian.h"
-#include "../../util/m2m_log.h"
+#include "../../../include/m2m_log.h"
 
 int WD_SYSTEM coap_pdu_clear(coap_pdu_t *pdu, size_t size) 
 {

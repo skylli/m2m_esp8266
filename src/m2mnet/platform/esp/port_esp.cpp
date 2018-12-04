@@ -18,14 +18,24 @@
 #include <stdbool.h>
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
+#include <SPI.h>
+
+#include "../../config/config.h"
+#include "../../include/m2m_app.h"
 
 #include "../../include/m2m.h"
 #include "../../include/util.h"
 
-#include "../../src/util/m2m_log.h"
+#include "../../include/m2m_log.h"
 #include "../../src/network/m2m/m2m_endian.h"
 
+#include "config_hardware.h"
+#include <ESP8266httpUpdate.h>
+#include <EEPROM.h>
+
+#define eeAddress  200
 #define SYSTIMERUIN      1000  //系统时间单位s
+u32 last_tm = 0;
 
 /* c interface */
 extern "C" int m2m_gethostbyname(M2M_Address_T* addr,char* host);
@@ -52,6 +62,17 @@ extern "C" int broadcast_enable(int socket_fd);
 extern "C" int get_bcast_list(u32 *list, int maxlen);
 extern "C" u8 *getlocal_ip(void);
 extern "C" void local_ip_save(void);
+
+extern "C" void ota_loop(void* p_host,u16 port,void* p_name);
+extern "C" void EEPROM_write_block(unsigned char *memory_block, unsigned int start_address, unsigned int block_size);
+extern "C" void EEPROM_read_block(unsigned char *memory_block, unsigned int start_address, unsigned int block_size);
+
+extern "C" void getmac(u8 *p_dst);
+extern "C" int to_deal_cmd(u8 cmd,u8*p_data,int recv_len);
+extern "C" void delay_mms(int stat);
+extern "C" int Serial_write(u8 *data, int len);
+
+
 /* environment static value*/
 static WiFiUDP Udp;
 
@@ -288,11 +309,147 @@ int get_bcast_list(u32 *list, int maxlen)
 }
 static u8 local_ip[32];
 void local_ip_save(void){
+
     mmemset(local_ip, 0, 32);
-    sprintf((char*)local_ip,"%u.%u.%u.%u",WiFi.localIP()[0],WiFi.localIP()[1],WiFi.localIP()[2],WiFi.localIP()[3]);
+	if(WiFi.getMode() == WIFI_AP)
+		sprintf((char*)local_ip,"%u.%u.%u.%u",WiFi.softAPIP()[0],WiFi.softAPIP()[1],WiFi.softAPIP()[2],WiFi.softAPIP()[3]);
+	else 
+		sprintf((char*)local_ip,"%u.%u.%u.%u",WiFi.localIP()[0],WiFi.localIP()[1],WiFi.localIP()[2],WiFi.localIP()[3]);
     printf("local ip %s\n", (char*)local_ip);
+	
 }
 u8 *getlocal_ip(void){
     return local_ip;
 }
+void getmac(u8 *p_dst){
+  WiFi.macAddress(p_dst);
+}
+ void EEPROM_write_block(unsigned char *memory_block, unsigned int start_address, unsigned int block_size)
+{
+   unsigned char Count = 0;
+   for (Count=0; Count < block_size; Count++)
+   {  
+       EEPROM.write(start_address + Count, memory_block[Count]);
+   }
+   EEPROM.commit();
+}
+void EEPROM_read_block(unsigned char *memory_block, unsigned int start_address, unsigned int block_size)
+{
+   unsigned char Count = 0;
+   for (Count=0; Count < block_size; Count++)
+   {
+       memory_block[Count]= EEPROM.read(start_address + Count);
+   }
+}
+
+void ota_loop(char* p_host,u16 port,char* p_name) {
+    // wait for WiFi connection
+    int ret = 0;
+    String s = "";
+    Serial.print('c');
+		
+		String  h = p_host;
+		String  n = p_name;
+		
+		
+    if(( WiFi.status() == WL_CONNECTED)) {
+        t_httpUpdate_return ret = ESPhttpUpdate.update(h,port,n, s, false, s, true);
+        
+		//t_httpUpdate_return ret = ESPhttpUpdate.update("192.168.0.114",6969,"/time.ino.nodemcu.bin", s, false, s, true);
+		//t_httpUpdate_return  ret = ESPhttpUpdate.update("http://www.evalogik.com:8000/firmware/esp_plug01.bin");
+        Serial.print('+');
+        switch(ret) {
+            case HTTP_UPDATE_FAILED:
+                //USE_SERIAL.printf("HTTP_UPDATE_FAILD Error (%d): %s", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
+                Serial.println("HTTP_UPDATE_FAILE");
+                break;
+
+            case HTTP_UPDATE_NO_UPDATES:
+                Serial.println("HTTP_UPDATE_NO_UPDATES");
+                break;
+
+            case HTTP_UPDATE_OK:
+                Serial.println("HTTP_UPDATE_OK");
+                break;
+        }
+    }
+}
+
+void delay_mms(int stat){
+      delay(stat);
+}
+
+int to_deal_cmd(u8 cmd,u8*p_data,int recv_len){
+	Lm2m_ota_data putota;
+	Lm2m_ota_data getota;
+
+	switch (cmd){
+		case WIFI_CMD_APP_UART_SEND_RQ:
+			return Serial.write(p_data,recv_len);
+	
+		case WIFI_CMD_SYS_OTA_HOST_SET_RQ:
+    {
+		    char *p_name1 = (char *)malloc(70);
+		    u16 i;//65535 enough
+	        strcpy(p_name1,"/");
+	        char *p_ip1 = strtok((char *)p_data,":");
+	        char *p_port1 = strtok(NULL, "/");
+	        char *s_name1 = strtok(NULL, "");
+	        strcat(p_name1,s_name1); 
+	        i = atoi(p_port1);
+	        strcpy(putota.ip,p_ip1);
+	        strcpy(putota.name,p_name1);
+	        putota.port = i;
+	        EEPROM_write_block((unsigned char*)&putota,eeAddress,sizeof(Lm2m_ota_data)); 
+            mfree(p_name1);
+			break;
+	    }
+		case WIFI_CMD_SYS_OTA_START_RQ:
+				EEPROM_read_block((unsigned char*)&getota,eeAddress,sizeof(Lm2m_ota_data));
+						//ota_loop(p_ip1,i,p_name);
+				ota_loop(getota.ip,getota.port,getota.name);
+			
+				break;
+		case WIFI_CMD_SYS_OTA_UPDATE_RQ:
+    {
+            	char *p_name = (char *)malloc(70);
+            	u16 i;//65535 enough
+				strcpy(p_name,"/");
+				char *p_ip1 = strtok((char *)p_data,":");
+				char *p_port = strtok(NULL, "/");
+				char *s_name = strtok(NULL, "");
+				strcat(p_name,s_name); 
+				i = atoi(p_port);
+				ota_loop(p_ip1,i,p_name);
+                mfree(p_name);
+        }      
+			break;
+		case WIFI_CMD_SYS_RELAYHOST_SET_RQ:
+			printf( "this is a test data4\n" );
+			break;
+        case WIFI_CMD_TO_CONNECT:
+			
+    //todo connect the wifi
+     {
+        char ssid[] = "W123456789";
+        char key[]  = "123456789"; 
+        int status = 0; 
+        WiFi.disconnect();
+     while ( status != WL_CONNECTED) {
+        Serial.print("Attempting to connect to WEP network, SSID: ");
+        Serial.println(ssid);
+        status = WiFi.begin(ssid, key);
+        delay(10000);
+  }
+        ESP.restart();
+     } 
+			break;
+		}
+	return 0;
+}
+int Serial_write(u8 *data, int len){
+
+	return Serial.write(data,len);
+}
+
 

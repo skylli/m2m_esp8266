@@ -17,7 +17,7 @@
 
 #include "option.h"
 #include "../../../include/m2m.h"
-#include "../../util/m2m_log.h"
+#include "../../../include/m2m_log.h"
 
 coap_opt_t * WD_SYSTEM options_start(coap_pdu_t *pdu) 
 {

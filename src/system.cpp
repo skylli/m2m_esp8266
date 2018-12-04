@@ -128,7 +128,7 @@ void sys_wifi_init(void){
 			sys_sta_smartconfig();
 			sys_conf.wifi_mod = WIFI_MODE_STA_SMT;
 			sys_eeprom_write(EEPROM_CONF_ADDRESS, (u8*)&sys_conf, sizeof(EEPROM_conf_T));
-			
+	
 			break;
 		case WIFI_MODE_RST_AP:
 			{

@@ -131,8 +131,8 @@ void dev_callback(int code, M2M_packet_T **pp_ack_data,void *p_r,void *p_arg){
                  m2m_log_debug("local ip %s\n", getlocal_ip());
 
                  m2m_bytes_dump("local ip dump : ", (u8*)getlocal_ip(),  strlen(getlocal_ip()) );
-                 m2m_log_debug("server receive code = %d\n", code);
-                 if( p_recv_data->len > 0 && p_recv_data->p_data){
+                 m2m_log_debug("server receive code = %d\n", code );
+                 if( p_recv_data->len > 0 && p_recv_data->p_data ){
                       m2m_log("server receive data : %s\n",p_recv_data->p_data);
                 }
                 *pp_ack_data = p_ack;

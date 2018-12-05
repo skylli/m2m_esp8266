@@ -69,8 +69,11 @@
 
 #define ID_CLASS_LED	(0x01)
 #define ID_CLASS_HOME	(0X02)
+
 #define ID_PRODUCT_LED_SHOWHOME	(0X01)
 #define ID_PRODUCT_LED_SHOWHOME	(0X01)
+
+#define ID_PRODUCT_TEST			(0XE1)
 
 #endif // _CONFIG_H
 

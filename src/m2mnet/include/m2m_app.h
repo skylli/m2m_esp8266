@@ -17,13 +17,13 @@ typedef enum{
 	WIFI_CMD_ROUTER_CONF,        //设置AP模式的用户名与密码
 
 	WIFI_CMD_SYS_REBOOT_RQ, 	// 重新启动
-
-	WIFI_CMD_SYS_OTA_HOST_SET_RQ,      // 设置 ota 服务器地址3
-    WIFI_CMD_SYS_OTA_START_RQ,         // 开始更新 wifi 固件5
     WIFI_CMD_SYS_OTA_UPDATE_RQ,        // 直接更新 wifi 固件7
+    WIFI_CMD_SYS_BROADCASTSETTING_RQ, // 设置模块是否接受广播包.
 	
-    WIFI_CMD_TO_CONNECT   ,         	//直接连接一个特定的WIFI
+    //WIFI_CMD_TO_CONNECT   ,         	//直接连接一个特定的WIFI
     WIFI_CMD_APP_UART_SEND_RQ = 0x50,  // 串口透传.
+    WIFI_CMD_APP_LED_TWINKLE_RQ = 0x61,  // supper twinkle.
+    
     
     WIFICMD_MAX
 }WIFI_CMD;
@@ -36,6 +36,7 @@ typedef struct WIFI_PACKET{
     u8 len;         // 数据长度
     char payload[0];// 数据
 } Wifi_pkt;
+
 
 
 typedef struct UART_PACKET{

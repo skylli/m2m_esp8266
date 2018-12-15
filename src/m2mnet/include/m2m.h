@@ -164,38 +164,38 @@ typedef struct M2M_ROUTER_LIST_T{
 
 }M2M_Router_list_T;
 
-	//AP mode data
-	typedef struct{
-			u16 ssidlen;
-			u16 passwordlen;
-			u8 *p_ssid_pw[0];
-	}LM2M_router_conf;
-	//device mac
-	typedef struct LM2M_LOCAL_T{
-		u32 idh;
-		u32 idl;
-	}Lm2m_local_T;
-	//
-	typedef struct LM2M_DATA_T{
-		u8 ver;  //版本号
-		u8 cmd; // 命令
-		u8 idx; // 序号, 预留给 sensor 使用
-		u16 len; // payload 长度
-		u8 data[0];//预留
-	}Lm2m_data_T;
-    
-    typedef struct{
-        u8 version;     // 验证数,表示协议和协议版本，目前是 0x01
-        u8 cmd;         // 命令类型
-        u8 idx;         // 序号, 预留
-        u8 len;         // 数据长度
-        char payload[0];// 数据
-    } WIFI_PACKET1;
-	typedef struct LM2M_OTA_data{
-	  u16 port;
-	  char ip[16];
-	  char name[60];
-	}Lm2m_ota_data;
+//AP mode data
+typedef struct{
+		u16 ssidlen;
+		u16 passwordlen;
+		u8 p_ssid_pw[0];
+}LM2M_router_conf;
+//device mac
+typedef struct LM2M_LOCAL_T{
+	u32 idh;
+	u32 idl;
+}Lm2m_local_T;
+//
+typedef struct LM2M_DATA_T{
+	u8 ver;  //版本号
+	u8 cmd; // 命令
+	u8 idx; // 序号, 预留给 sensor 使用
+	u16 len; // payload 长度
+	u8 data[0];//预留
+}Lm2m_data_T;
+
+typedef struct{
+    u8 version;     // 验证数,表示协议和协议版本，目前是 0x01
+    u8 cmd;         // 命令类型
+    u8 idx;         // 序号, 预留
+    u8 len;         // 数据长度
+    char payload[0];// 数据
+} WIFI_PACKET1;
+typedef struct LM2M_OTA_data{
+  u16 port;
+  char ip[16];
+  char name[60];
+}Lm2m_ota_data;
 
 
 #ifdef __cplusplus

@@ -427,7 +427,7 @@ static int pkt_receive(M2M_proto_recv_rawpkt_T *p_rawpkt,int flags){
     p_rawpkt->stoken = p_r->stoken;
 	p_rawpkt->ctoken = p_r->ctoken;
     if( p_r->stoken == 0 && p_rawpkt->ctoken == 0 && p_rawpkt->enc_type != M2M_ENC_TYPE_BROADCAST )
-        m2m_debug_level( M2M_LOG,"NO token !!");
+        m2m_log_warn("NO token stoken = %u !!", p_r->stoken);
     //m2m_bytes_dump("encoder pdu :", p_r->p_payload,p_r->payloadlen);
 
     DEV_ID_LOG_PRINT( M2M_LOG_DEBUG, p_rawpkt->src_id,"source id "," ---------->\n");
@@ -613,15 +613,16 @@ static int pkt_decode( M2M_dec_args_T *p_a,int flags){
     }else if( p_r->secret_type == M2M_ENC_TYPE_BROADCAST ){
         m2m_debug_level(M2M_LOG_DEBUG,"receive package broad cast package");
         mcpy((u8*)p_d, (u8*)p_r->p_payload,  p_r->payloadlen);
-        p_dec->payload.p_data = p_d;
-        p_dec->payload.len = p_r->payloadlen;
+        //p_dec->payload.p_data = p_d;
+        // p_dec->payload.len = p_r->payloadlen;
+		//return  M2M_ERR_NOERR;
     }else if( p_r->secret_type == p_dec->p_enc->type && payload_enc_len > 0 ){
-        
         // 一致才解码
         m2m_debug_level(M2M_LOG_DEBUG,"receive encrypted package");
         ret_dec = data_dec( (const char*)p_r->p_payload,(char*)p_d, payload_enc_len, p_dec->p_enc->keylen,p_dec->p_enc->p_enckey);
         if( ret_dec <= 0 ){
-            m2m_debug_level(M2M_LOG_WARN,"Package decode failure !!");
+            m2m_log_warn("Package decode failure !!");
+			p_dec->payload.p_data = NULL;
             MFREE(p_d);
             return M2M_HTTP_SECRET_ERR;
             }  
@@ -631,10 +632,12 @@ static int pkt_decode( M2M_dec_args_T *p_a,int flags){
     _RETURN_EQUAL_FREE( p_pdu, NULL, p_d, M2M_ERR_NULL);
     if( 0 ==  coap_pdu_parse(p_d, p_r->payloadlen,p_pdu)){
         coap_delete_pdu(p_pdu);
+		p_dec->payload.p_data = NULL;
         MFREE(p_d);
         return -1;
     }
     // free dec data 
+    p_dec->payload.p_data = NULL;
     MFREE(p_d);
     // coap dispatch
     // get token

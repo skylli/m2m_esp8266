@@ -18,13 +18,12 @@ void setup()
 {
 	sys_setup();
     m2m_setup();
-	m2m_printf("end of set up.\n");
 }
 
 
 void loop()
 {		
 	m2m_loop();
-	sys_factory_reset();
+	system_loop();
 }
 

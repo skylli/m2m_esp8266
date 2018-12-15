@@ -17,9 +17,9 @@
 
 /****** C++ to c declear*******************************************************/
 
-extern "C" int app_cmd_handle(u8 cmd,u8*p_data,int recv_len);
+extern "C" int app_cmd_handle(u8 cmd,u8*p_data,int recv_len,M2M_packet_T **pp_ack_data);
 
-int app_cmd_handle(u8 cmd,u8*p_data,int recv_len){
+int app_cmd_handle(u8 cmd,u8*p_data,int recv_len,M2M_packet_T **pp_ack_data){
 	int ret = 0;
 	Lm2m_ota_data putota;
 	Lm2m_ota_data getota;
@@ -31,7 +31,7 @@ int app_cmd_handle(u8 cmd,u8*p_data,int recv_len){
 				ret = Serial.write(p_data,recv_len);
 			break;
 	}
-	
+
 	return ret;
 }
 

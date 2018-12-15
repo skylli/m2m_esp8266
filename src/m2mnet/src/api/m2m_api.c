@@ -87,8 +87,8 @@ size_t m2m_net_creat( M2M_id_T *p_id,int port, int key_len, u8 *p_key, M2M_id_T 
     cmd.hostport =  hostport;
 
 	// printf log 
-	m2m_bytes_dump(">> local id is:", (u8*)&cmd.my, sizeof(M2M_id_T));
-	m2m_bytes_dump(">> local key is:", (u8*)cmd.enc.p_enckey, cmd.enc.keylen);
+	//m2m_bytes_dump(">> local id is:", (u8*)&cmd.my, sizeof(M2M_id_T));
+	//m2m_bytes_dump(">> local key is:", (u8*)cmd.enc.p_enckey, cmd.enc.keylen);
 	
     // creat network
     p_n = net_creat(&cmd,0);
@@ -105,6 +105,27 @@ M2M_Return_T m2m_net_destory(size_t net){
     if(net)
         net_destory((Net_T*)net);
     return M2M_ERR_NOERR;
+}
+/**
+** 更新服务器的 host。
+*********/
+M2M_Return_T m2m_net_host_update(size_t net, M2M_id_T *p_id,u8 *p_host, int port){
+
+	
+    Net_Args_T arg;
+	mmemset(&arg, 0, sizeof(Net_Args_T));
+	
+	arg.p_net = (Net_T*)net;
+	arg.p_data = (void*)p_host;
+	arg.remote.dst_address.port = (u16)port;
+
+	if(p_id){
+		mcpy(&arg.remote_id, (u8*)p_id, sizeof(M2M_id_T) );
+	}
+	if( arg.p_net->ioctl_session )
+    	return arg.p_net->ioctl_session( M2M_NET_CMD_HOST_UPDATE, &arg,0);
+	else
+		return M2M_ERR_NULL; 
 }
 
 M2M_Return_T m2m_net_secretkey_set(size_t net,M2M_id_T *p_id,u8 *p_host,int port, int key_len,u8 *p_key,
@@ -237,7 +258,7 @@ M2M_Return_T m2m_session_destory(M2M_T *p_m2m){
     arg.p_s = (Session_T*) p_m2m->session;
     
     m2m_log_debug(" net <%p> session (%p) have been destory.\n", (void*)p_m2m->net, arg.p_s);
-    if( arg.p_net->ioctl_session )
+    if(  arg.p_net &&  arg.p_net->ioctl_session )
         return ( arg.p_net->ioctl_session(M2M_NET_CMD_SESSION_DESTORY,&arg,0) );
     else 
         return 0;
@@ -535,9 +556,9 @@ M2M_Return_T m2m_dev_online_check(size_t p, u8 *p_remoteHost, int remote_port, M
 ** description: 设备掉线事件报告
 ** args:
 **      1. net -  当前 net
-** return: True 表明设备已经  断线.
+** return: True 表明设备已近  短线.
 *****************************************************/
-M2M_Return_T m2m_event_host_offline(size_t net){
+BOOL m2m_event_host_offline(size_t net){
     Net_Args_T arg;
     if(!net)
         return M2M_ERR_INVALID;

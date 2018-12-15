@@ -35,11 +35,14 @@ typedef enum SYS_CNN_STATUS{
 	SYS_CNN_LOST_CONNECT,
 	SYS_CNN_OFFLINE,
 	SYS_CNN_ONLINE,
+	SYS_CNN_OTAING,
+	
 	SYS_CNN_MAX
 }SYS_cnn_status;
 typedef struct SYS_HOST_INFO{
 	u16 port;
 	u16 len;
+	M2M_id_T s_id;
 	u8 cname[0];
 }SYS_Host_info_t;
 
@@ -50,8 +53,10 @@ void sys_sta_smartconfig(void);
 void local_ip_save(void);
 int sys_ssid_pw_reset(LM2M_router_conf *p_router);
 SYS_cnn_status sys_connect_status_hanle(size_t net);
-int sys_cmd_handle(u8 cmd,u8*p_data,int recv_len);
-SYS_Host_info_t *sys_host_creat(void );
+int sys_cmd_handle(size_t net,u8 cmd,u8*p_data,int recv_len,M2M_packet_T **pp_ack_data);
+SYS_Host_info_t *sys_host_alloc(M2M_id_T *p_id);
+void system_loop(void);
+BOOL sys_broadcast_enable(void);
 
 #ifdef __cplusplus
 }

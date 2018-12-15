@@ -12,8 +12,9 @@
 #include "../../include/m2m_type.h"
 #include "../../config/config.h"
 #include "../../include/m2m_log.h"
+#include "../../include/util.h"
 
-u8 g_log_level = M2M_LOG_ALL;
+u8 g_log_level = M2M_LOG_ERROR;
 
 #ifdef CONF_LOG_TIME
 void current_time_printf(void){
@@ -47,7 +48,7 @@ char *time_str()
 static void _log_filename_update(){
 	char path[256];
 
-	mmemset(path, 0, 256);
+	mmemset((u8*)path, 0, 256);
 	time_t timep;
 	struct tm *p_tm;
 	time(&timep);
@@ -56,7 +57,7 @@ static void _log_filename_update(){
 		char *p = path + strlen(g_mlog.p_log_path); 
 		if(g_mlog.fp)
 			fclose(g_mlog.fp);
-		mcpy(path, g_mlog.p_log_path, strlen(g_mlog.p_log_path));
+		mcpy((u8*)path, g_mlog.p_log_path, strlen(g_mlog.p_log_path));
 		sprintf(p, "%d%02d%02d.log",(1900+p_tm->tm_year), (1+p_tm->tm_mon), p_tm->tm_mday);
 		m2m_printf("creat an new file %s\n", path);
 		g_mlog.file_index = p_tm->tm_mday;
@@ -115,16 +116,19 @@ void m2m_record_init(int level, const char *p_file){
 		sprintf(p, "%d%02d%02d.log",(1900+p_tm->tm_year), (1+p_tm->tm_mon), p_tm->tm_mday);
 		g_mlog.file_index = p_tm->tm_mday;		
 		g_mlog.fp = fopen(path, "a");
+		
+		g_mlog.p_log_path = (u8*)mmalloc( strlen(p_file) +1 );
+		if(g_mlog.p_log_path ){
+			mcpy(g_mlog.p_log_path, p_file, strlen(p_file));
+		}
+
 	}
 	
-    g_log_level = level;	
+    g_log_level = level;
 	g_mlog.err_cnt = 0;
     g_mlog.warn_cnt = 0;
     g_mlog.level = level;
-	g_mlog.p_log_path = mmalloc(strlen(p_file) +1);
-	if(g_mlog.p_log_path ){
-		mcpy(g_mlog.p_log_path, p_file, strlen(p_file));
-	}
+
 }
 #if 0
 void m2m_record_info(const char *fmt, ...){
@@ -149,7 +153,7 @@ void m2m_record_error(const char *fmt, ...){
 void m2m_record_uninit(void){
     if(g_mlog.fp)
         fclose(g_mlog.fp);
-	mfree(g_mlog.p_log_path);
+	mfree((void*)g_mlog.p_log_path);
     mmemset( (u8*)&g_mlog,0,sizeof(Log_T));
 }
 #endif // C_HAS_FILE
@@ -162,13 +166,13 @@ u8 m2m_record_level_get(){
     return g_log_level;
 }
 void m2m_bytes_dump(u8 *p_shd,u8 *p,int len){
-	
+
     int i ;
-    if(g_log_level <= M2M_LOG_DEBUG){
-	//if(1){	
-		m2m_printf("%s ",p_shd);
-	    for(i=0;i<len;i++)
-	        m2m_printf("[%x]",p[i]);
-	    m2m_printf(" >>end\n");
-	}
+	if(g_log_level >=  M2M_LOG_WARN )
+		return ;
+    m2m_printf("%s ",p_shd);
+
+    for(i=0;i<len;i++)
+        m2m_printf("[%x]",p[i]);
+    m2m_printf(" >>end\n");
 }

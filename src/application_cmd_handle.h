@@ -8,7 +8,7 @@
 extern "C"{
 #endif
 
-int app_cmd_handle(u8 cmd,u8*p_data,int recv_len);
+int app_cmd_handle(u8 cmd,u8*p_data,int recv_len,M2M_packet_T **pp_ack_data);
 
 
 #ifdef __cplusplus

@@ -1,6 +1,6 @@
 {
     "terminal.integrated.env.windows": {
-        "PATH": "C:\\Users\\Administrator\\.platformio\\penv\\Scripts;C:\\Users\\Administrator\\.platformio\\penv;C:\\Windows\\system32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\;C:\\Program Files\\Git\\cmd;C:\\Program Files\\Microsoft VS Code\\bin;C:\\Program Files\\CMake\\bin;C:\\Program Files\\LLVM\\bin;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Program Files\\Microsoft VS Code\\bin;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\Users\\Administrator\\AppData\\Local\\atom\\bin;C:\\Users\\Administrator\\.platformio\\python27;C:\\Users\\Administrator\\.platformio\\python27\\Scripts;D:\\software\\cmake-3.12.1-win32-x86\\bin;C:\\cygwin64\\bin;C:\\Windows\\system32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\;C:\\Program Files\\Git\\cmd;C:\\Program Files\\Microsoft VS Code\\bin;C:\\Program Files\\CMake\\bin;C:\\Program Files\\LLVM\\bin;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Program Files\\Microsoft VS Code\\bin;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\Users\\Administrator\\AppData\\Local\\atom\\bin;C:\\Users\\Administrator\\.platformio\\python27;C:\\Users\\Administrator\\.platformio\\python27\\Scripts;D:\\software\\cmake-3.12.1-win32-x86\\bin;C:\\cygwin64\\bin",
+        "PATH": "C:\\Users\\Administrator\\.platformio\\penv\\Scripts;C:\\Users\\Administrator\\.platformio\\penv;C:\\Program Files (x86)\\Common Files\\Oracle\\Java\\javapath;C:\\Windows\\system32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\;C:\\Program Files\\Git\\cmd;C:\\Program Files\\Microsoft VS Code\\bin;C:\\Program Files\\CMake\\bin;C:\\Program Files\\LLVM\\bin;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\Users\\Administrator\\AppData\\Local\\atom\\bin;C:\\Users\\Administrator\\.platformio\\python27;C:\\Users\\Administrator\\.platformio\\python27\\Scripts;D:\\software\\cmake-3.12.1-win32-x86\\bin;C:\\cygwin64\\bin;C:\\Program Files (x86)\\Common Files\\Oracle\\Java\\javapath;C:\\Windows\\system32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\;C:\\Program Files\\Git\\cmd;C:\\Program Files\\Microsoft VS Code\\bin;C:\\Program Files\\CMake\\bin;C:\\Program Files\\LLVM\\bin;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Users\\Administrator\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\Users\\Administrator\\AppData\\Local\\atom\\bin;C:\\Users\\Administrator\\.platformio\\python27;C:\\Users\\Administrator\\.platformio\\python27\\Scripts;D:\\software\\cmake-3.12.1-win32-x86\\bin;C:\\cygwin64\\bin",
         "PLATFORMIO_CALLER": "vscode"
     },
     "C_Cpp.intelliSenseEngineFallback": "Disabled",
@@ -13,6 +13,11 @@
         "osapi.h": "c",
         "config_hardware.h": "c",
         "app_config.h": "c",
-        "app_m2m_handle.h": "c"
+        "app_m2m_handle.h": "c",
+        "product_config.h\u0000ct_config.h": "c",
+        "product_config.h\u0000nfig.h": "c",
+        "product_config.h\u0000onfig.h": "c",
+        "product_config.h\u0000t_config.h": "c",
+        "product_config.h\u0000_config.h": "c"
     }
 }

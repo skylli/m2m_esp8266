@@ -2,6 +2,7 @@
 ** sample 
 *********************************************************/
 #include <string.h>
+#include "../config/product_config.h"
 #include "m2mnet/include/m2m_type.h"
 #include "m2mnet/include/m2m.h"
 #include "m2mnet/include/m2m_api.h"
@@ -12,6 +13,7 @@
 #include "m2mnet/include/m2m_app.h"
 #include "app_m2m_handle.h"
 #include "app_config.h"
+
 
 
 
@@ -33,6 +35,7 @@ void dev_callback(int code,M2M_packet_T **pp_ack_pkt, void *p_r,void *p_arg);
 typedef struct DEV_OBS_T
 {
 	void *p_node;
+	size_t net;
 	int obs_rq_cnt;
 	int notify_cnt;
 	int reobserver_cnt;
@@ -55,15 +58,18 @@ int m2m_setup(void){
     getmac((u8*)&device_id.id[ ID_LEN - 6 ]);
 	
 	// creat entire id of the product.
-	product_id_head_set( device_id.id, ID_VERSION, ID_TYPE_DEVICE, (s16)ID_CLASS_LED, (u32)ID_PRODUCT_LED_SHOWHOME, NULL);
-	product_id_print( &device_id);
+	product_id_head_set( device_id.id, ID_VERSION, ID_TYPE_DEVICE, (s16)PRODUCT_CLASS, (u32)PRODUCT_ID, NULL);
 
-	string2hexarry((u8*)&hid, TST_SERVER_ID, strlen(TST_SERVER_ID));
+	//byte_printf("device id ", (u8*)&device_id, ID_LEN );
+
+	//m2m_bytes_dump( "ID : ", &device_id,  ID_LEN );
+	
+	//string2hexarry((u8*)&hid, PRODUCT_SERVER_ID, strlen(PRODUCT_SERVER_ID));
     conf.max_router_tm = 10*60*1000;
     conf.do_relay = 0;
     m2m_int(&conf);
 
-	SYS_Host_info_t *p_host = sys_host_creat();
+	SYS_Host_info_t *p_host = sys_host_alloc(&hid);
 
 	if(p_host){
 
@@ -76,42 +82,35 @@ int m2m_setup(void){
 	}
 
     if( m2m.net == 0 ){
-        m2m_printf(" creat network failt !!\n");
+        //m2m_printf(" creat network failt !!\n");
         return -1;
     }
-	
+	obs.net = m2m.net;
+	if( !sys_broadcast_enable() ){	
+#ifdef TURNON_BROADCAST
+		m2m_broadcast_disable(m2m.net);
+#endif TURNON_BROADCAST
+	}
     return 0;
 }
 int m2m_loop(void){
+
 	static u32 old_tm = 0;
     static BOOL net_stat = 0;
-    // 创建 net ，连接到远端服务器。
+
+	// 创建 net ，连接到远端服务器。
     // M2M_Return_T m2m_int(M2M_conf_T *p_conf);
-		while(1){
-			sys_connect_status_hanle( m2m.net );
-			sys_factory_reset();
-			m2m_trysync( m2m.net );
-        if(DIFF_(old_tm, m2m_current_time_get()) > CHECK_ONLINE_TM){ 
-            net_stat = m2m_event_host_offline( m2m.net);
-            if(!net_stat){ 
-                //printf("the server is  on the net !!\n");
-                }
-            else{
-                //printf("the server is not on the net !!\n");
-                //todo
-                }
-            old_tm = m2m_current_time_get();
-            }
-            
-		#if 0	
-			if(obs.p_node ){
-				if(DIFF_(old_tm, m2m_current_time_get()) > NOTIFY_INTERVAL_TM){	
-					m2m_session_notify_push( &m2m, obs.p_node, strlen(TCONF_NOTIFY_DATA1),TCONF_NOTIFY_DATA1, dev_callback, &obs);
-					old_tm = m2m_current_time_get();
-				}
-			}	
-		#endif
+	m2m_trysync( m2m.net );
+	sys_connect_status_hanle( m2m.net );
+        
+	#if 0	
+		if(obs.p_node ){
+			if(DIFF_(old_tm, m2m_current_time_get()) > NOTIFY_INTERVAL_TM){	
+				m2m_session_notify_push( &m2m, obs.p_node, strlen(TCONF_NOTIFY_DATA1),TCONF_NOTIFY_DATA1, dev_callback, &obs);
+				old_tm = m2m_current_time_get();
+			}
 		}	
+	#endif
 	return 1;
 }
 void dev_callback(int code, M2M_packet_T **pp_ack_data,void *p_r,void *p_arg){
@@ -120,9 +119,13 @@ void dev_callback(int code, M2M_packet_T **pp_ack_data,void *p_r,void *p_arg){
 	M2M_packet_T *p_recv_data = (M2M_packet_T*)p_r;
     m2m_log_warn("rcode %d", code);
     //m2m_printf(" application dump 1111 rcode %d\n",code);
+    if(p_arg){
+		p_devobs = (Dev_obs_T *)p_arg;
+	}
     switch(code){
         case M2M_REQUEST_BROADCAST: 
             {
+            #if 1
                  M2M_packet_T *p_ack = (M2M_packet_T*)mmalloc(sizeof(M2M_packet_T));
                  p_ack->p_data = (u8*)mmalloc( sizeof( M2M_id_T) + strlen(getlocal_ip()) + 1 );
                  p_ack->len = sizeof( M2M_id_T) + strlen(getlocal_ip());
@@ -136,9 +139,10 @@ void dev_callback(int code, M2M_packet_T **pp_ack_data,void *p_r,void *p_arg){
                       m2m_log("server receive data : %s\n",p_recv_data->p_data);
                 }
                 *pp_ack_data = p_ack;
+				 #endif
             }
             break;
-	
+#if 0	
 		case M2M_REQUEST_OBSERVER_RQ:
 	
 			if(!p_arg || !p_r)
@@ -163,20 +167,20 @@ void dev_callback(int code, M2M_packet_T **pp_ack_data,void *p_r,void *p_arg){
 			p_devobs->p_node = p_robs->p_obs_node;			
 			p_devobs->exit = 1;
 			break;
+#endif
 		case M2M_REQUEST_DATA:
 			//todo data Lm2m_data_T
             if( p_recv_data && p_recv_data->len > 0 && p_recv_data->p_data){
                 u8 *p_data=NULL, cmd =0;
                     m2m_bytes_dump((u8*)"application dump : ", p_recv_data->p_data, p_recv_data->len);
-         //to divice the pack
+         			//to divice the pack
                     int recv_len = wifi_decode1( &p_data, &cmd, p_recv_data->len, p_recv_data->p_data);
 
-					 m2m_bytes_dump((u8*)"p_data dump : ",p_data , recv_len);
-					 
-					 if(cmd < WIFI_CMD_APP_UART_SEND_RQ )
-						sys_cmd_handle(cmd, p_data, recv_len);  // only  handle system command.
-					 else
-					 	app_cmd_handle(cmd, p_data, recv_len); // handle application command.
+					 if(cmd < WIFI_CMD_APP_UART_SEND_RQ ){
+					 	if(p_devobs)
+							sys_cmd_handle( p_devobs->net,cmd, p_data, recv_len, pp_ack_data);  // only  handle system command.
+					 }else
+					 	app_cmd_handle(cmd, p_data, recv_len,pp_ack_data); // handle application command.
                }
 			break;
         default:
@@ -190,9 +194,6 @@ void dev_callback(int code, M2M_packet_T **pp_ack_data,void *p_r,void *p_arg){
                 m2m_log("receive data : %s\n",p_recv_data->p_data);
                 m2m_bytes_dump((u8*)"recv dump : ", p_recv_data->p_data, p_recv_data->len);
 
-                 if(p_arg ) {
-                        *((int*) p_arg) = *((int*) p_arg) - 1;
-                    }
                  *pp_ack_data = p_ack;
                 }
             break;

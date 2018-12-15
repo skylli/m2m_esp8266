@@ -73,12 +73,15 @@ M2M_Return_T m2m_session_data_send(M2M_T *p_m2m,int len,u8 *p_data,m2m_func func
 
 // 重发，接收处理
 M2M_Return_T m2m_trysync(size_t net);
-M2M_Return_T m2m_event_host_offline(size_t net);
+BOOL m2m_event_host_offline(size_t net);
 
 M2M_Return_T m2m_dev_online_check(size_t p_net, u8 *p_remoteHost, int remote_port, M2M_id_T *p_id, m2m_func func, void *p_args);
 BOOL m2m_session_connted(M2M_T *p_m2m);
 BOOL m2m_net_connted(size_t p);
 M2M_Return_T m2m_net_secretkey_set(size_t net,M2M_id_T *p_id,u8 *p_host,int port, int key_len,u8 *p_key,int newkey_len, u8 *p_newkey,m2m_func func, void *p_args);
+
+// 更新 server host ， 可以在 callback中动态调用。
+M2M_Return_T m2m_net_host_update(size_t net, M2M_id_T *p_id,u8 *p_host, int port);
 
 // observer 数据发送 
 /*****************************************************

@@ -294,6 +294,7 @@ int m2m_receive_filt_addr
 // 获取系统时间
 u32 m2m_current_time_get(void)
 {
+	yield();
     return ( millis());
 }
 u32 m2m_get_random(){
@@ -315,7 +316,7 @@ void local_ip_save(void){
 		sprintf((char*)local_ip,"%u.%u.%u.%u",WiFi.softAPIP()[0],WiFi.softAPIP()[1],WiFi.softAPIP()[2],WiFi.softAPIP()[3]);
 	else 
 		sprintf((char*)local_ip,"%u.%u.%u.%u",WiFi.localIP()[0],WiFi.localIP()[1],WiFi.localIP()[2],WiFi.localIP()[3]);
-    printf("local ip %s\n", (char*)local_ip);
+    m2m_log("local ip %s\n", (char*)local_ip);
 	
 }
 u8 *getlocal_ip(void){
@@ -342,112 +343,11 @@ void EEPROM_read_block(unsigned char *memory_block, unsigned int start_address, 
    }
 }
 
-void ota_loop(char* p_host,u16 port,char* p_name) {
-    // wait for WiFi connection
-    int ret = 0;
-    String s = "";
-    Serial.print('c');
-		
-		String  h = p_host;
-		String  n = p_name;
-		
-		
-    if(( WiFi.status() == WL_CONNECTED)) {
-        t_httpUpdate_return ret = ESPhttpUpdate.update(h,port,n, s, false, s, true);
-        
-		//t_httpUpdate_return ret = ESPhttpUpdate.update("192.168.0.114",6969,"/time.ino.nodemcu.bin", s, false, s, true);
-		//t_httpUpdate_return  ret = ESPhttpUpdate.update("http://www.evalogik.com:8000/firmware/esp_plug01.bin");
-        Serial.print('+');
-        switch(ret) {
-            case HTTP_UPDATE_FAILED:
-                //USE_SERIAL.printf("HTTP_UPDATE_FAILD Error (%d): %s", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
-                Serial.println("HTTP_UPDATE_FAILE");
-                break;
-
-            case HTTP_UPDATE_NO_UPDATES:
-                Serial.println("HTTP_UPDATE_NO_UPDATES");
-                break;
-
-            case HTTP_UPDATE_OK:
-                Serial.println("HTTP_UPDATE_OK");
-                break;
-        }
-    }
-}
-
 void delay_mms(int stat){
       delay(stat);
 }
 
-int to_deal_cmd(u8 cmd,u8*p_data,int recv_len){
-	Lm2m_ota_data putota;
-	Lm2m_ota_data getota;
-
-	switch (cmd){
-		case WIFI_CMD_APP_UART_SEND_RQ:
-			return Serial.write(p_data,recv_len);
-	
-		case WIFI_CMD_SYS_OTA_HOST_SET_RQ:
-    {
-		    char *p_name1 = (char *)malloc(70);
-		    u16 i;//65535 enough
-	        strcpy(p_name1,"/");
-	        char *p_ip1 = strtok((char *)p_data,":");
-	        char *p_port1 = strtok(NULL, "/");
-	        char *s_name1 = strtok(NULL, "");
-	        strcat(p_name1,s_name1); 
-	        i = atoi(p_port1);
-	        strcpy(putota.ip,p_ip1);
-	        strcpy(putota.name,p_name1);
-	        putota.port = i;
-	        EEPROM_write_block((unsigned char*)&putota,eeAddress,sizeof(Lm2m_ota_data)); 
-            mfree(p_name1);
-			break;
-	    }
-		case WIFI_CMD_SYS_OTA_START_RQ:
-				EEPROM_read_block((unsigned char*)&getota,eeAddress,sizeof(Lm2m_ota_data));
-						//ota_loop(p_ip1,i,p_name);
-				ota_loop(getota.ip,getota.port,getota.name);
-			
-				break;
-		case WIFI_CMD_SYS_OTA_UPDATE_RQ:
-    {
-            	char *p_name = (char *)malloc(70);
-            	u16 i;//65535 enough
-				strcpy(p_name,"/");
-				char *p_ip1 = strtok((char *)p_data,":");
-				char *p_port = strtok(NULL, "/");
-				char *s_name = strtok(NULL, "");
-				strcat(p_name,s_name); 
-				i = atoi(p_port);
-				ota_loop(p_ip1,i,p_name);
-                mfree(p_name);
-        }      
-			break;
-		case WIFI_CMD_SYS_RELAYHOST_SET_RQ:
-			printf( "this is a test data4\n" );
-			break;
-        case WIFI_CMD_TO_CONNECT:
-			
-    //todo connect the wifi
-     {
-        char ssid[] = "W123456789";
-        char key[]  = "123456789"; 
-        int status = 0; 
-        WiFi.disconnect();
-     while ( status != WL_CONNECTED) {
-        Serial.print("Attempting to connect to WEP network, SSID: ");
-        Serial.println(ssid);
-        status = WiFi.begin(ssid, key);
-        delay(10000);
-  }
-        ESP.restart();
-     } 
-			break;
-		}
-	return 0;
-}
-int Serial_write(u8 *data, int len){
+int Serial_write(u8 *data, int len){ 
 
 	return Serial.write(data,len);
 }

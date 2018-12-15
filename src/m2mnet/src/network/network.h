@@ -17,7 +17,7 @@
 
 /** net work configration *************************************************/
 #define INTERVAL_PING_TM_MS    DEFAULT_INTERVAL_PING_TM_MS 
-#define MAX_PING_PKG_LOST		(3)
+#define MAX_PING_PKG_LOST		(1)
 
 /** struct ***
 * 1. 等待 ack 认领节点队列。
@@ -131,7 +131,8 @@ typedef enum M2M_NET_CMD_T{
     M2M_NET_CMD_NET_SECRETKEY_SET,
     M2M_NET_CMD_TRYSYNC,
     M2M_NET_CMD_ONLINE_CHECK,    
-    M2M_NET_CMD_CONNT_CHECK,
+    M2M_NET_CMD_CONNT_CHECK,    
+    M2M_NET_CMD_HOST_UPDATE,
     
     M2M_NET_CMD_MAX
     

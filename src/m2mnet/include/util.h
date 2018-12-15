@@ -98,9 +98,13 @@ int mmemset(u8 *dst,u8 c,size_t n);
 void mfree(void *ptr);
 void mcpy(u8 *d,u8 *s,int len);
 int string2hexarry(u8 *p_dst, const u8 *p_s, int nlen);
+int product_id_head_set(u8 *p_id,char ver, char type, s16 mclass, u32 pid, u8 *p_mac);
 
-int product_id_head_set(u8 *p_id,char ver, char type, s16 dclass, u32 pid, u8 *p_mac);
+int product_id_pid_metch(u8 *p_id,   u32 pid);
+
 void product_id_print(u8 *p_id);
+void byte_printf(u8 *p_had,u8 *p_byte, int len);
+
 
 #ifdef __cplusplus
 }
